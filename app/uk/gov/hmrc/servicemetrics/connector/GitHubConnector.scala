@@ -16,12 +16,12 @@
 
 package uk.gov.hmrc.servicemetrics.connector
 
-import play.api.libs.json.{Json, Reads, __}
+import play.api.libs.json.JsObject
+import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.http.client.HttpClientV2
-import uk.gov.hmrc.http.{HeaderCarrier, HttpReads, HttpResponse, StringContextOps}
-import HttpReads.Implicits._
+import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.servicemetrics.config.GitHubConfig
-import uk.gov.hmrc.servicemetrics.connector.GitHubConnector.{DbOverride, Dbs}
+import uk.gov.hmrc.servicemetrics.connector.GitHubConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import javax.inject.Inject
@@ -32,17 +32,15 @@ class GitHubConnector @Inject()(httpClientV2 : HttpClientV2,
 
 
   def getMongoOverrides(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[DbOverride]] = {
-    implicit val dbr = Dbs.reads
     httpClientV2
       .get(url"${gitHubConfig.githubRawUrl}/hmrc/vault-policy-definitions-${environment.asString}/main/db-overrides.json")
       .setHeader("Authorization" -> s"token ${gitHubConfig.githubToken}")
       .withProxy
-      .execute[HttpResponse]
-      .map(res =>
-        Json.parse(res.body)
-          .as[Map[String, Seq[Dbs]]]
-          .flatMap{ entry =>
-            entry._2.map(dbs => DbOverride(entry._1, dbs.value))
+      .execute[Map[String, Seq[JsObject]]]
+      .map(
+        _
+          .flatMap { case (k, vs) =>
+            vs.map(v => DbOverride(k, (v \ "dbs").as[Seq[String]]))
           }.toSeq
       )
   }
@@ -51,10 +49,4 @@ class GitHubConnector @Inject()(httpClientV2 : HttpClientV2,
 
 object GitHubConnector {
   case class DbOverride(service: String, dbs: Seq[String])
-
-  case class Dbs(value: Seq[String])
-
-  object Dbs {
-    val reads: Reads[Dbs] = (__ \ "dbs").read[Seq[String]].map(Dbs(_))
-  }
 }
