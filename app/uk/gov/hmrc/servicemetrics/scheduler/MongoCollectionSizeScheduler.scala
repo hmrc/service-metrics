@@ -46,7 +46,7 @@ class MongoCollectionSizeScheduler @Inject()(
   scheduleWithLock(
     label           = "MongoCollectionSizeScheduler",
     schedulerConfig = schedulerConfig.mongoCollectionSizeScheduler,
-    lock            = LockService(lockRepository, "mongo-collection-size-scheduler", 10.minutes)
+    lock            = LockService(lockRepository, "mongo-collection-size-scheduler", 30.minutes)
   ) {
     val envs: List[Environment] =
       Environment.values.filterNot(_.equals(Environment.Integration))
