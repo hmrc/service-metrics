@@ -28,6 +28,7 @@ import uk.gov.hmrc.servicemetrics.service.MongoMetricsService
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.DurationInt
+import scala.util.control.NonFatal
 
 @Singleton
 class MongoCollectionSizeScheduler @Inject()(
@@ -47,10 +48,21 @@ class MongoCollectionSizeScheduler @Inject()(
     schedulerConfig = schedulerConfig.mongoCollectionSizeScheduler,
     lock            = LockService(lockRepository, "mongo-collection-size-scheduler", 10.minutes)
   ) {
-    logger.info("Updating mongo collection sizes")
+    val envs: List[Environment] =
+      Environment.values.filterNot(_.equals(Environment.Integration))
+
+    logger.info(s"Updating mongo collection sizes for ${envs.mkString(",")}")
     implicit val hc: HeaderCarrier = HeaderCarrier()
     for {
-      _ <- Future.traverse(Environment.values){e => mongoMetricsService.updateCollectionSizes(e)}
-    } yield logger.info("Finished updating mongo collection sizes")
+      _ <- Future.traverse(envs){ env =>
+        mongoMetricsService
+          .updateCollectionSizes(env)
+          .recoverWith {
+            case NonFatal(e) =>
+              logger.warn(s"Failed to update mongo collection sizes for ${env.asString}", e)
+              Future.unit
+          }
+      }
+    } yield logger.info(s"Finished updating mongo collection sizes for ${envs.mkString(",")}")
   }
 }

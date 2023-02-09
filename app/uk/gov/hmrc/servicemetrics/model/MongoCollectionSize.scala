@@ -33,7 +33,7 @@ case class MongoCollectionSize(
 object MongoCollectionSize {
   implicit val envf = Environment.format
   val format: OFormat[MongoCollectionSize] =
-    ( (__ \ "database"   ).format[String]//Optional? if vault override use other service name, go to github everytime
+    ( (__ \ "database"   ).format[String]
     ~ (__ \ "collection" ).format[String]
     ~ (__ \ "sizeBytes"  ).format[BigDecimal]
     ~ (__ \ "date"       ).format[LocalDate]
