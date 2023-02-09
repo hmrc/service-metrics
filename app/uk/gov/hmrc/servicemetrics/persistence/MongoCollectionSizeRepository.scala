@@ -55,7 +55,7 @@ object MongoCollectionSizeRepository {
 
   val indexes: Seq[IndexModel] =
     Seq(
-      IndexModel(Indexes.ascending("service"), IndexOptions().name("mcsServiceIdx")),
+      IndexModel(Indexes.ascending("service"), IndexOptions().name("mcsServiceIdx").sparse(true)),
       IndexModel(Indexes.ascending("environment"), IndexOptions().name("mcsEnvironmentIdx"))
     )
 }
