@@ -1,0 +1,120 @@
+/*
+ * Copyright 2023 HM Revenue & Customs
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package uk.gov.hmrc.servicemetrics.connector
+
+
+import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, get, stubFor, urlEqualTo}
+import org.mockito.scalatest.MockitoSugar
+import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+import uk.gov.hmrc.http.HeaderCarrier
+import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
+import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
+
+import scala.concurrent.ExecutionContext.Implicits.global
+
+class TeamsAndRepositoriesConnectorSpec
+extends AnyWordSpec
+with Matchers
+with ScalaFutures
+with IntegrationPatience
+with HttpClientV2Support
+with WireMockSupport
+with MockitoSugar {
+
+  private implicit val hc: HeaderCarrier = HeaderCarrier()
+
+  private val mockConfig: ServicesConfig = mock[ServicesConfig]
+
+  when(mockConfig.baseUrl(any[String])).thenReturn(wireMockUrl)
+
+  private val connector = new TeamsAndRepositoriesConnector(httpClientV2, mockConfig)
+
+  "allServices" should {
+    "return list of service names" in {
+
+      val rawResponse =
+        """
+          |[
+          |  {
+          |    "name": "service-one",
+          |    "description": "",
+          |    "url": "https://github.com/hmrc/service-one",
+          |    "createdDate": "2018-11-07T10:54:02Z",
+          |    "lastActiveDate": "2022-01-11T17:10:23Z",
+          |    "isPrivate": true,
+          |    "repoType": "Service",
+          |    "owningTeams": [],
+          |    "language": "HTML",
+          |    "isArchived": false,
+          |    "defaultBranch": "main",
+          |    "branchProtection": {
+          |      "requiresApprovingReviews": false,
+          |      "dismissesStaleReviews": false,
+          |      "requiresCommitSignatures": true
+          |    },
+          |    "isDeprecated": false,
+          |    "teamNames": [
+          |      "Team One"
+          |    ]
+          |  },
+          |  {
+          |    "name": "service-two",
+          |    "description": "",
+          |    "url": "https://github.com/hmrc/service-one",
+          |    "createdDate": "2019-10-10T15:13:50Z",
+          |    "lastActiveDate": "2020-11-20T08:51:39Z",
+          |    "isPrivate": true,
+          |    "repoType": "Service",
+          |    "owningTeams": [],
+          |    "language": "HTML",
+          |    "isArchived": false,
+          |    "defaultBranch": "main",
+          |    "branchProtection": {
+          |      "requiresApprovingReviews": false,
+          |      "dismissesStaleReviews": false,
+          |      "requiresCommitSignatures": true
+          |    },
+          |    "isDeprecated": false,
+          |    "teamNames": [
+          |      "Team Two"
+          |    ]
+          |  }
+          |]""".stripMargin
+
+      stubFor(
+        get(urlEqualTo("/api/v2/repositories"))
+          .willReturn(
+            aResponse()
+              .withStatus(200)
+              .withBody(rawResponse)
+          )
+      )
+
+      val expected = Seq(ServiceName("service-one"), ServiceName("service-two"))
+
+      val response = connector.allServices().futureValue
+
+      response should contain theSameElementsAs expected
+    }
+  }
+
+
+
+}
