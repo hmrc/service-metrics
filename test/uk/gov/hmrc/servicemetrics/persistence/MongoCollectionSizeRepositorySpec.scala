@@ -14,16 +14,21 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.servicemetrics.config
+package uk.gov.hmrc.servicemetrics.persistence
 
-import com.google.inject.AbstractModule
-import uk.gov.hmrc.servicemetrics.scheduler.MongoCollectionSizeScheduler
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+import uk.gov.hmrc.mongo.test.DefaultPlayMongoRepositorySupport
+import uk.gov.hmrc.servicemetrics.model.MongoCollectionSize
 
-class Module extends AbstractModule {
+import scala.concurrent.ExecutionContext.Implicits.global
 
-  override def configure(): Unit = {
+class MongoCollectionSizeRepositorySpec
+  extends AnyWordSpec
+  with Matchers
+  with DefaultPlayMongoRepositorySupport[MongoCollectionSize] {
 
-    bind(classOf[AppConfig]).asEagerSingleton()
-    bind(classOf[MongoCollectionSizeScheduler]).asEagerSingleton()
-  }
+  override lazy val repository = new MongoCollectionSizeRepository(mongoComponent)
+
+  //TODO
 }

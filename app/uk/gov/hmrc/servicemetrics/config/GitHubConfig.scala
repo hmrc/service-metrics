@@ -16,14 +16,12 @@
 
 package uk.gov.hmrc.servicemetrics.config
 
-import com.google.inject.AbstractModule
-import uk.gov.hmrc.servicemetrics.scheduler.MongoCollectionSizeScheduler
+import play.api.Configuration
 
-class Module extends AbstractModule {
+import javax.inject.{Inject, Singleton}
 
-  override def configure(): Unit = {
-
-    bind(classOf[AppConfig]).asEagerSingleton()
-    bind(classOf[MongoCollectionSizeScheduler]).asEagerSingleton()
-  }
+@Singleton
+class GitHubConfig @Inject()(configuration: Configuration) {
+  val githubRawUrl: String  = configuration.get[String]("github.open.api.rawurl")
+  val githubToken:  String  = configuration.get[String]("github.open.api.token")
 }
