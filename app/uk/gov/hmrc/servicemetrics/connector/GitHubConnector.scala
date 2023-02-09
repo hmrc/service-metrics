@@ -22,6 +22,7 @@ import uk.gov.hmrc.http.{HeaderCarrier, HttpReads, HttpResponse, StringContextOp
 import HttpReads.Implicits._
 import uk.gov.hmrc.servicemetrics.config.GitHubConfig
 import uk.gov.hmrc.servicemetrics.connector.GitHubConnector.{DbOverride, Dbs}
+import uk.gov.hmrc.servicemetrics.model.Environment
 
 import javax.inject.Inject
 import scala.concurrent.{ExecutionContext, Future}
@@ -30,10 +31,10 @@ class GitHubConnector @Inject()(httpClientV2 : HttpClientV2,
                                 gitHubConfig: GitHubConfig)(implicit ec: ExecutionContext) {
 
 
-  def getMongoOverrides()(implicit hc: HeaderCarrier): Future[Seq[DbOverride]] = {
+  def getMongoOverrides(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[DbOverride]] = {
     implicit val dbr = Dbs.reads
     httpClientV2
-      .get(url"${gitHubConfig.githubRawUrl}/hmrc/vault-policy-definitions-production/main/db-overrides.json")
+      .get(url"${gitHubConfig.githubRawUrl}/hmrc/vault-policy-definitions-${environment.asString}/main/db-overrides.json")
       .setHeader("Authorization" -> s"token ${gitHubConfig.githubToken}")
       .withProxy
       .execute[HttpResponse]

@@ -45,7 +45,7 @@ class MongoMetricsService @Inject()(
     for {
       services    <- teamsAndRepositoriesConnector.allServices()
       databases   <- carbonApiConnector.getDatabaseNames(environment)
-      dbOverrides <- gitHubConnector.getMongoOverrides()
+      dbOverrides <- gitHubConnector.getMongoOverrides(environment)
       sorted      =  databases.map(_.value).sortBy(_.length).reverse
       metrics     <- carbonApiConnector.getMongoMetrics(environment)
       transformed =  metrics.flatMap { m =>
