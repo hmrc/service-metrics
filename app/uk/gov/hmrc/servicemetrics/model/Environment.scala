@@ -58,10 +58,10 @@ object Environment {
 
   implicit val queryStringBindable: QueryStringBindable[Environment] =
     new QueryStringBindable[Environment] {
-      private val Name = "environment"
+      private val name = "environment"
 
       override def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, Environment]] =
-        params.get(Name).map { values =>
+        params.get(name).map { values =>
           values.toList match {
             case Nil         => Left("missing environment value")
             case head :: Nil => pathBindable.bind(key, head)
@@ -70,6 +70,6 @@ object Environment {
         }
 
       override def unbind(key: String, value: Environment): String =
-        s"$Name=${value.asString}"
+        s"$name=${value.asString}"
     }
 }
