@@ -16,25 +16,27 @@
 
 package uk.gov.hmrc.servicemetrics.controllers
 
+import play.api.libs.json.{Json, Writes}
 import play.api.mvc.{Action, AnyContent, ControllerComponents}
 import uk.gov.hmrc.play.bootstrap.backend.controller.BackendController
-import uk.gov.hmrc.servicemetrics.model.Environment
-import uk.gov.hmrc.servicemetrics.service.MongoMetricsService
+import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
+import uk.gov.hmrc.servicemetrics.service.MongoCollectionSizeService
 
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.ExecutionContext
 
 @Singleton()
-class MetricController @Inject()(
+class MongoCollectionSizeController @Inject()(
 cc: ControllerComponents
-, mongoMetricService: MongoMetricsService
+, mongoMetricService: MongoCollectionSizeService
 )(implicit
   ec: ExecutionContext
 ) extends BackendController(cc) {
 
-  def test() : Action[AnyContent] = Action.async { implicit request =>
-    mongoMetricService.updateCollectionSizes(Environment.QA).map(_ => Ok)
-  }
-
-
+  def getCollections(service: String, environment: Option[Environment]): Action[AnyContent] =
+    Action.async {
+      implicit val writes: Writes[MongoCollectionSize] = MongoCollectionSize.apiWrites
+      mongoMetricService.getCollections(service, environment)
+        .map(mcs => Ok(Json.toJson(mcs)))
+    }
 }

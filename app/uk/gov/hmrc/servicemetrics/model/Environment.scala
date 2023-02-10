@@ -17,6 +17,7 @@
 package uk.gov.hmrc.servicemetrics.model
 
 import play.api.libs.json.{Format, JsError, JsResult, JsString, JsSuccess, JsValue}
+import play.api.mvc.{PathBindable, QueryStringBindable}
 
 sealed trait Environment { def asString: String }
 
@@ -45,4 +46,30 @@ object Environment {
     override def reads(json: JsValue): JsResult[Environment] =
       json.validate[String].flatMap(s => Environment.parse(s).map(e => JsSuccess(e)).getOrElse(JsError("invalid environment")))
   }
+
+  implicit val pathBindable: PathBindable[Environment] =
+    new PathBindable[Environment] {
+      override def bind(key: String, value: String): Either[String, Environment] =
+        parse(value).toRight(s"Invalid Environment '$value'")
+
+      override def unbind(key: String, value: Environment): String =
+        value.asString
+    }
+
+  implicit val queryStringBindable: QueryStringBindable[Environment] =
+    new QueryStringBindable[Environment] {
+      private val Name = "environment"
+
+      override def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, Environment]] =
+        params.get(Name).map { values =>
+          values.toList match {
+            case Nil         => Left("missing environment value")
+            case head :: Nil => pathBindable.bind(key, head)
+            case _           => Left("too many environment values")
+          }
+        }
+
+      override def unbind(key: String, value: Environment): String =
+        s"$Name=${value.asString}"
+    }
 }

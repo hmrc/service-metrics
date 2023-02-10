@@ -16,7 +16,6 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
-import com.mongodb.BasicDBObject
 import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
 import uk.gov.hmrc.mongo.MongoComponent
 import uk.gov.hmrc.mongo.play.json.PlayMongoRepository
@@ -34,7 +33,7 @@ class MongoCollectionSizeRepository @Inject()(
 ) extends PlayMongoRepository(
   mongoComponent = mongoComponent,
   collectionName = MongoCollectionSizeRepository.collectionName,
-  domainFormat   = MongoCollectionSize.format,
+  domainFormat   = MongoCollectionSize.mongoFormat,
   indexes        = MongoCollectionSizeRepository.indexes
 ) with Transactions {
 

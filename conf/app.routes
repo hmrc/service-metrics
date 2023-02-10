@@ -1,2 +1,2 @@
 # microservice specific routes
-GET        /mongo-metrics     uk.gov.hmrc.servicemetrics.controllers.MetricController.test
+GET        /collections/:service     uk.gov.hmrc.servicemetrics.controllers.MongoCollectionSizeController.getCollections(service: String, environment: Option[Environment] ?= None)

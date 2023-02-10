@@ -23,7 +23,7 @@ import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.mongo.lock.{LockService, MongoLockRepository}
 import uk.gov.hmrc.servicemetrics.config.SchedulerConfigs
 import uk.gov.hmrc.servicemetrics.model.Environment
-import uk.gov.hmrc.servicemetrics.service.MongoMetricsService
+import uk.gov.hmrc.servicemetrics.service.MongoCollectionSizeService
 
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
@@ -34,7 +34,7 @@ import scala.util.control.NonFatal
 class MongoCollectionSizeScheduler @Inject()(
   schedulerConfig     : SchedulerConfigs
 , lockRepository      : MongoLockRepository
-, mongoMetricsService : MongoMetricsService
+, mongoMetricsService : MongoCollectionSizeService
 )(implicit
   actorSystem          : ActorSystem
 , applicationLifecycle : ApplicationLifecycle
