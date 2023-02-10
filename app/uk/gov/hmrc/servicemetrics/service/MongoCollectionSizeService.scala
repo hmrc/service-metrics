@@ -29,7 +29,7 @@ import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class MongoMetricsService @Inject()(
+class MongoCollectionSizeService @Inject()(
   carbonApiConnector            : CarbonApiConnector
 , teamsAndRepositoriesConnector : TeamsAndRepositoriesConnector
 , gitHubConnector               : GitHubConnector
@@ -39,6 +39,9 @@ class MongoMetricsService @Inject()(
 ) {
 
   private val logger = Logger(getClass)
+
+  def getCollections(service: String, environment: Option[Environment]): Future[Seq[MongoCollectionSize]] =
+    mongoCollectionSizeRepository.find(service, environment)
 
   def updateCollectionSizes(environment: Environment)(implicit hc: HeaderCarrier): Future[Unit] = {
     logger.info(s"updating mongo collection sizes for ${environment.asString}")
@@ -51,7 +54,7 @@ class MongoMetricsService @Inject()(
       transformed =  metrics.flatMap { m =>
                        transform(environment, m, sorted, dbOverrides, services.map(_.value))
                      }.flatten
-      _           <- mongoCollectionSizeRepository.putAll(transformed)
+      _           <- mongoCollectionSizeRepository.putAll(transformed, environment)
     } yield ()
   }
 

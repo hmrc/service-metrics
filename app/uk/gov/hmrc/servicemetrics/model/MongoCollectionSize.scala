@@ -17,7 +17,8 @@
 package uk.gov.hmrc.servicemetrics.model
 
 import play.api.libs.functional.syntax.{toFunctionalBuilderOps, unlift}
-import play.api.libs.json.{OFormat, __}
+import play.api.libs.json.{OFormat, Writes, __}
+import uk.gov.hmrc.mongo.play.json.formats.MongoJavatimeFormats
 
 import java.time.LocalDate
 
@@ -31,8 +32,9 @@ case class MongoCollectionSize(
 )
 
 object MongoCollectionSize {
-  implicit val envf = Environment.format
-  val format: OFormat[MongoCollectionSize] =
+  val mongoFormat: OFormat[MongoCollectionSize] = {
+    implicit val envf = Environment.format
+    import MongoJavatimeFormats.Implicits._
     ( (__ \ "database"   ).format[String]
     ~ (__ \ "collection" ).format[String]
     ~ (__ \ "sizeBytes"  ).format[BigDecimal]
@@ -40,4 +42,16 @@ object MongoCollectionSize {
     ~ (__ \ "environment").format[Environment]
     ~ (__ \ "service"    ).formatNullable[String]
     )(apply, unlift(unapply))
+  }
+
+  val apiWrites: Writes[MongoCollectionSize] = {
+    implicit val envf = Environment.format
+    ( (__ \ "database"   ).write[String]
+    ~ (__ \ "collection" ).write[String]
+    ~ (__ \ "sizeBytes"  ).write[BigDecimal]
+    ~ (__ \ "date"       ).write[LocalDate]
+    ~ (__ \ "environment").write[Environment]
+    ~ (__ \ "service"    ).writeNullable[String]
+    )(unlift(unapply))
+  }
 }

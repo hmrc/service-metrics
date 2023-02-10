@@ -28,9 +28,9 @@ import uk.gov.hmrc.servicemetrics.persistence.MongoCollectionSizeRepository
 import java.time.{Instant, LocalDate}
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class MongoMetricsServiceSpec extends AnyWordSpec with Matchers with MockitoSugar {
+class MongoCollectionSizeServiceSpec extends AnyWordSpec with Matchers with MockitoSugar {
 
-  private val service = new MongoMetricsService(
+  private val service = new MongoCollectionSizeService(
     mock[CarbonApiConnector],
     mock[TeamsAndRepositoriesConnector],
     mock[GitHubConnector],

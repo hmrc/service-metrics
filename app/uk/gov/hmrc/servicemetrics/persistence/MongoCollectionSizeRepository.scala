@@ -16,12 +16,11 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
-import com.mongodb.BasicDBObject
-import org.mongodb.scala.model.{IndexModel, IndexOptions, Indexes}
+import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
 import uk.gov.hmrc.mongo.MongoComponent
 import uk.gov.hmrc.mongo.play.json.PlayMongoRepository
 import uk.gov.hmrc.mongo.transaction.{TransactionConfiguration, Transactions}
-import uk.gov.hmrc.servicemetrics.model.MongoCollectionSize
+import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
@@ -34,20 +33,30 @@ class MongoCollectionSizeRepository @Inject()(
 ) extends PlayMongoRepository(
   mongoComponent = mongoComponent,
   collectionName = MongoCollectionSizeRepository.collectionName,
-  domainFormat   = MongoCollectionSize.format,
+  domainFormat   = MongoCollectionSize.mongoFormat,
   indexes        = MongoCollectionSizeRepository.indexes
 ) with Transactions {
 
   private implicit val tc: TransactionConfiguration = TransactionConfiguration.strict
 
-  def putAll(mcs: Seq[MongoCollectionSize]): Future[Unit] =
+  def find(service: String, environment: Option[Environment] = None): Future[Seq[MongoCollectionSize]] = {
+
+    val filters = Seq(
+      Some(Filters.equal("service", service)),
+      environment.map(env => Filters.equal("environment", env.asString))
+    ).flatten
+
+    collection.find(Filters.and(filters:_*)).toFuture()
+
+  }
+
+  def putAll(mcs: Seq[MongoCollectionSize], environment: Environment): Future[Unit] =
     withSessionAndTransaction { session =>
       for {
-        _ <- collection.deleteMany(session, new BasicDBObject()).toFuture()
+        _ <- collection.deleteMany(session, Filters.equal("environment", environment.asString)).toFuture()
         _ <- collection.insertMany(session, mcs).toFuture()
       } yield ()
     }
-
 }
 
 object MongoCollectionSizeRepository {
