@@ -51,7 +51,7 @@ class MongoMetricsService @Inject()(
       transformed =  metrics.flatMap { m =>
                        transform(environment, m, sorted, dbOverrides, services.map(_.value))
                      }.flatten
-      _           <- mongoCollectionSizeRepository.putAll(transformed)
+      _           <- mongoCollectionSizeRepository.putAll(transformed, environment)
     } yield ()
   }
 

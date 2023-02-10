@@ -19,8 +19,9 @@ package uk.gov.hmrc.servicemetrics.persistence
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import uk.gov.hmrc.mongo.test.DefaultPlayMongoRepositorySupport
-import uk.gov.hmrc.servicemetrics.model.MongoCollectionSize
+import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 
+import java.time.LocalDate
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class MongoCollectionSizeRepositorySpec
@@ -30,5 +31,35 @@ class MongoCollectionSizeRepositorySpec
 
   override lazy val repository = new MongoCollectionSizeRepository(mongoComponent)
 
-  //TODO
+  private def seed(env: Environment) = Seq(
+    MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now, env, Some("service-one"))
+  )
+
+  "putAll" should {
+    "refresh data for a given environment" in {
+
+      repository.putAll(seed(Environment.QA), Environment.QA).futureValue
+      repository.putAll(seed(Environment.Staging), Environment.Staging).futureValue
+      repository.putAll(seed(Environment.Production), Environment.Production).futureValue
+
+      repository.find("service-one", Some(Environment.QA))
+        .futureValue
+        .headOption
+        .map(_.sizeBytes) shouldBe Some(BigDecimal(1000))
+
+      val updated = seed(Environment.QA).map(_.copy(sizeBytes = BigDecimal(2000)))
+
+      repository.putAll(updated, Environment.QA).futureValue
+
+      repository.find("service-one", Some(Environment.Staging))
+        .futureValue
+        .headOption
+        .map(_.sizeBytes) shouldBe Some(BigDecimal(1000))
+
+      repository.find("service-one", Some(Environment.QA))
+        .futureValue
+        .headOption
+        .map(_.sizeBytes) shouldBe Some(BigDecimal(2000))
+    }
+  }
 }
