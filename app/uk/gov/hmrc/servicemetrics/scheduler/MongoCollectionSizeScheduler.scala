@@ -51,7 +51,7 @@ class MongoCollectionSizeScheduler @Inject()(
     val envs: List[Environment] =
       Environment.values.filterNot(_.equals(Environment.Integration))
 
-    logger.info(s"Updating mongo collection sizes for ${envs.mkString(",")}")
+    logger.info(s"Updating mongo collection sizes for ${envs.mkString(", ")}")
     implicit val hc: HeaderCarrier = HeaderCarrier()
     for {
       _ <- Future.traverse(envs){ env =>
@@ -63,6 +63,6 @@ class MongoCollectionSizeScheduler @Inject()(
               Future.unit
           }
       }
-    } yield logger.info(s"Finished updating mongo collection sizes for ${envs.mkString(",")}")
+    } yield logger.info(s"Finished updating mongo collection sizes for ${envs.mkString(", ")}")
   }
 }

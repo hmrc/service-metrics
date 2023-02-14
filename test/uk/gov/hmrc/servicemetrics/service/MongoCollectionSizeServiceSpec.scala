@@ -20,6 +20,8 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, GitHubConnector, TeamsAndRepositoriesConnector}
 import org.mockito.scalatest.MockitoSugar
+import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
+import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.connector.GitHubConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.MongoCollectionSizeMetric
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
@@ -27,15 +29,36 @@ import uk.gov.hmrc.servicemetrics.persistence.MongoCollectionSizeRepository
 
 import java.time.{Instant, LocalDate}
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
-class MongoCollectionSizeServiceSpec extends AnyWordSpec with Matchers with MockitoSugar {
+class MongoCollectionSizeServiceSpec
+  extends AnyWordSpec
+  with Matchers
+  with MockitoSugar
+  with ScalaFutures
+  with IntegrationPatience {
+
+  private val mockTeamsAndReposConnector = mock[TeamsAndRepositoriesConnector]
+  private val mockRepository             = mock[MongoCollectionSizeRepository]
 
   private val service = new MongoCollectionSizeService(
     mock[CarbonApiConnector],
-    mock[TeamsAndRepositoriesConnector],
+    mockTeamsAndReposConnector,
     mock[GitHubConnector],
-    mock[MongoCollectionSizeRepository]
+    mockRepository
   )
+
+  "updateCollectionSizes" should {
+    "leave the db unchanged if gathering metrics fails" in {
+      when(mockTeamsAndReposConnector.allServices()(any[HeaderCarrier])).thenReturn(Future.failed(new RuntimeException("test exception")))
+
+      implicit val hc: HeaderCarrier = HeaderCarrier()
+      service.updateCollectionSizes(Environment.QA)
+
+      verify(mockTeamsAndReposConnector, times(1)).allServices()
+      verifyZeroInteractions(mockRepository.putAll(anySeq[MongoCollectionSize], any[Environment]))
+    }
+  }
 
   "transform" should {
     "return MongoCollectionSize for a service" in {

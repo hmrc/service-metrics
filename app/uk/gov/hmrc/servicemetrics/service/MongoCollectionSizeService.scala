@@ -44,7 +44,7 @@ class MongoCollectionSizeService @Inject()(
     mongoCollectionSizeRepository.find(service, environment)
 
   def updateCollectionSizes(environment: Environment)(implicit hc: HeaderCarrier): Future[Unit] = {
-    logger.info(s"updating mongo collection sizes for ${environment.asString}")
+    logger.info(s"Updating mongo collection sizes for ${environment.asString}")
     for {
       services    <- teamsAndRepositoriesConnector.allServices()
       databases   <- carbonApiConnector.getDatabaseNames(environment)
@@ -55,7 +55,7 @@ class MongoCollectionSizeService @Inject()(
                        transform(environment, m, sorted, dbOverrides, services.map(_.value))
                      }.flatten
       _           <- mongoCollectionSizeRepository.putAll(transformed, environment)
-    } yield ()
+    } yield logger.info(s"Successfully updated mongo collection sizes for ${environment.asString}")
   }
 
   private[service] def transform(
