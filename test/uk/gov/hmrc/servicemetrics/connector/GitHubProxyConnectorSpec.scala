@@ -23,13 +23,13 @@ import org.scalatest.wordspec.AnyWordSpec
 import play.api.Configuration
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
-import uk.gov.hmrc.servicemetrics.config.GitHubConfig
-import uk.gov.hmrc.servicemetrics.connector.GitHubConnector.DbOverride
+import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
+import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class GitHubConnectorSpec
+class GitHubProxyConnectorSpec
   extends AnyWordSpec
   with Matchers
   with ScalaFutures
@@ -37,14 +37,13 @@ class GitHubConnectorSpec
   with HttpClientV2Support
   with WireMockSupport {
 
-    private val testToken = "test-token"
 
-    private lazy val githubConnector =
-      new GitHubConnector(
+    private lazy val gitHubProxyConnector =
+      new GitHubProxyConnector(
         httpClientV2   = httpClientV2,
-        gitHubConfig = new GitHubConfig(Configuration(
-          "github.open.api.rawurl" -> wireMockUrl,
-          "github.open.api.token"  -> testToken
+        new ServicesConfig(Configuration(
+          "microservice.services.platops-github-proxy.port" -> wireMockPort,
+          "microservice.services.platops-github-proxy.host" -> wireMockHost
         ))
       )
 
@@ -77,7 +76,7 @@ class GitHubConnectorSpec
 
     "return DBOverrides" in {
       stubFor(
-        get(urlEqualTo("/hmrc/vault-policy-definitions-qa/main/db-overrides.json"))
+        get(urlEqualTo("/platops-github-proxy/github-raw/vault-policy-definitions-qa/main/db-overrides.json"))
           .willReturn(
             aResponse()
               .withStatus(200)
@@ -90,15 +89,14 @@ class GitHubConnectorSpec
         DbOverride(service = "service-two", dbs = Seq("randomdb"))
       )
 
-      val response = githubConnector
+      val response = gitHubProxyConnector
         .getMongoOverrides(Environment.QA)
         .futureValue
 
       response should contain theSameElementsAs expected
 
       verify(
-        getRequestedFor(urlEqualTo("/hmrc/vault-policy-definitions-qa/main/db-overrides.json"))
-          .withHeader("Authorization", equalTo(s"token $testToken"))
+        getRequestedFor(urlEqualTo("/platops-github-proxy/github-raw/vault-policy-definitions-qa/main/db-overrides.json"))
       )
     }
   }

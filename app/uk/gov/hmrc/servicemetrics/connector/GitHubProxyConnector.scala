@@ -20,22 +20,24 @@ import play.api.libs.json.JsObject
 import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
-import uk.gov.hmrc.servicemetrics.config.GitHubConfig
-import uk.gov.hmrc.servicemetrics.connector.GitHubConnector.DbOverride
+import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
+import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import javax.inject.Inject
 import scala.concurrent.{ExecutionContext, Future}
 
-class GitHubConnector @Inject()(httpClientV2 : HttpClientV2,
-                                gitHubConfig: GitHubConfig)(implicit ec: ExecutionContext) {
+class GitHubProxyConnector @Inject()(
+  httpClientV2  : HttpClientV2
+, servicesConfig: ServicesConfig
+)(implicit ec: ExecutionContext) {
 
 
-  def getMongoOverrides(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[DbOverride]] = {
+  private val gitHubProxyBaseURL: String = servicesConfig.baseUrl("platops-github-proxy")
+
+  def getMongoOverrides(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[DbOverride]] =
     httpClientV2
-      .get(url"${gitHubConfig.githubRawUrl}/hmrc/vault-policy-definitions-${environment.asString}/main/db-overrides.json")
-      .setHeader("Authorization" -> s"token ${gitHubConfig.githubToken}")
-      .withProxy
+      .get(url"$gitHubProxyBaseURL/platops-github-proxy/github-raw/vault-policy-definitions-${environment.asString}/main/db-overrides.json")
       .execute[Map[String, Seq[JsObject]]]
       .map(
         _
@@ -43,10 +45,8 @@ class GitHubConnector @Inject()(httpClientV2 : HttpClientV2,
             vs.map(v => DbOverride(k, (v \ "dbs").as[Seq[String]]))
           }.toSeq
       )
-  }
-
 }
 
-object GitHubConnector {
+object GitHubProxyConnector {
   case class DbOverride(service: String, dbs: Seq[String])
 }

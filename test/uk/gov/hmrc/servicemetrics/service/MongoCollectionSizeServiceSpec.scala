@@ -18,11 +18,11 @@ package uk.gov.hmrc.servicemetrics.service
 
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, GitHubConnector, TeamsAndRepositoriesConnector}
+import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, GitHubProxyConnector, TeamsAndRepositoriesConnector}
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import uk.gov.hmrc.http.HeaderCarrier
-import uk.gov.hmrc.servicemetrics.connector.GitHubConnector.DbOverride
+import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.MongoCollectionSizeMetric
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.MongoCollectionSizeRepository
@@ -44,7 +44,7 @@ class MongoCollectionSizeServiceSpec
   private val service = new MongoCollectionSizeService(
     mock[CarbonApiConnector],
     mockTeamsAndReposConnector,
-    mock[GitHubConnector],
+    mock[GitHubProxyConnector],
     mockRepository
   )
 
