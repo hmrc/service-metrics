@@ -18,9 +18,9 @@ package uk.gov.hmrc.servicemetrics.service
 
 import play.api.Logger
 import uk.gov.hmrc.http.HeaderCarrier
-import uk.gov.hmrc.servicemetrics.connector.GitHubConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.MongoCollectionSizeMetric
-import uk.gov.hmrc.servicemetrics.connector.{GitHubConnector, CarbonApiConnector, TeamsAndRepositoriesConnector}
+import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
+import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, GitHubProxyConnector, TeamsAndRepositoriesConnector}
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.MongoCollectionSizeRepository
 
@@ -32,7 +32,7 @@ import scala.concurrent.{ExecutionContext, Future}
 class MongoCollectionSizeService @Inject()(
   carbonApiConnector            : CarbonApiConnector
 , teamsAndRepositoriesConnector : TeamsAndRepositoriesConnector
-, gitHubConnector               : GitHubConnector
+, gitHubProxyConnector          : GitHubProxyConnector
 , mongoCollectionSizeRepository : MongoCollectionSizeRepository
 )(implicit
   ec: ExecutionContext
@@ -48,7 +48,7 @@ class MongoCollectionSizeService @Inject()(
     for {
       services    <- teamsAndRepositoriesConnector.allServices()
       databases   <- carbonApiConnector.getDatabaseNames(environment)
-      dbOverrides <- gitHubConnector.getMongoOverrides(environment)
+      dbOverrides <- gitHubProxyConnector.getMongoOverrides(environment)
       sorted      =  databases.map(_.value).sortBy(_.length).reverse
       metrics     <- carbonApiConnector.getMongoMetrics(environment)
       transformed =  metrics.flatMap { m =>
