@@ -37,6 +37,9 @@ class MongoCollectionSizeRepository @Inject()(
   indexes        = MongoCollectionSizeRepository.indexes
 ) with Transactions {
 
+  // all records are deleted before inserting fresh on schedule
+  override lazy val requiresTtlIndex: Boolean = false
+
   private implicit val tc: TransactionConfiguration = TransactionConfiguration.strict
 
   def find(service: String, environment: Option[Environment] = None): Future[Seq[MongoCollectionSize]] = {

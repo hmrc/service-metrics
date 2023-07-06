@@ -32,7 +32,7 @@ class MongoCollectionSizeRepositorySpec
   override lazy val repository = new MongoCollectionSizeRepository(mongoComponent)
 
   private def seed(env: Environment) = Seq(
-    MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now, env, Some("service-one"))
+    MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now, env, "service-one")
   )
 
   "putAll" should {
