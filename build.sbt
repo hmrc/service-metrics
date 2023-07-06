@@ -1,6 +1,5 @@
 import play.sbt.routes.RoutesKeys
 import uk.gov.hmrc.DefaultBuildSettings.integrationTestSettings
-import uk.gov.hmrc.sbtdistributables.SbtDistributablesPlugin.publishingSettings
 
 lazy val microservice = Project("service-metrics", file("."))
   .enablePlugins(play.sbt.PlayScala, SbtDistributablesPlugin)
@@ -14,7 +13,6 @@ lazy val microservice = Project("service-metrics", file("."))
     scalacOptions            += "-Wconf:src=routes/.*:s",
     RoutesKeys.routesImport  ++= Seq("uk.gov.hmrc.servicemetrics.model.Environment")
   )
-  .settings(publishingSettings: _*)
   .configs(IntegrationTest)
   .settings(integrationTestSettings(): _*)
   .settings(resolvers += Resolver.jcenterRepo)
