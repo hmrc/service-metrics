@@ -19,6 +19,7 @@ package uk.gov.hmrc.servicemetrics.service
 import play.api.Logger
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
 import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, ClickHouseConnector, GitHubProxyConnector, TeamsAndRepositoriesConnector}
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.MongoCollectionSizeRepository
@@ -49,7 +50,7 @@ class MongoCollectionSizeService @Inject()(
       databases   <- clickHouseConnector.getDatabaseNames(environment)
       services    <- teamsAndRepositoriesConnector.allServices()
       dbOverrides <- gitHubProxyConnector.getMongoOverrides(environment)
-      mappings    =  getMappings(databases, services.map(_.value), dbOverrides)
+      mappings    =  getMappings(databases, services, dbOverrides)
       collSizes   <- Future.traverse(mappings)(mapping => getCollectionSizes(mapping, environment)).map(_.flatten)
       _           <- mongoCollectionSizeRepository.putAll(collSizes, environment)
     } yield logger.info(s"Successfully updated mongo collection sizes for ${environment.asString}")
@@ -73,23 +74,23 @@ class MongoCollectionSizeService @Inject()(
             sizeBytes   = metric.sizeBytes,
             date        = metric.timestamp.atZone(ZoneOffset.UTC).toLocalDate,
             environment = environment,
-            service     = mapping.service
+            service     = mapping.service.value
           )
         }
       }
 
   private[service] def getMappings(
     databases: Seq[String]
-  , knownServices: Seq[String]
+  , knownServices: Seq[ServiceName]
   , dbOverrides: Seq[DbOverride]
   ): Seq[DbMapping] =
     for {
       database  <- databases
       filterOut =  databases.filter(_.startsWith(database + "-"))
       services  =  dbOverrides.filter(_.dbs.contains(database)).toList match {
-                     case Nil => knownServices.filter(_ == database)
-                     case List(o) => knownServices.filter(_ == o.service)
-                     case overrides => overrides.flatMap(o => knownServices.filter(_ == o.service))
+                     case Nil => knownServices.filter(_.value == database)
+                     case List(o) => knownServices.filter(_.value == o.service)
+                     case overrides => overrides.flatMap(o => knownServices.filter(_.value == o.service))
                    }
       service   <- services
     } yield DbMapping(
@@ -103,5 +104,5 @@ object MongoCollectionSizeService {
   // filterOut is used to filter metrics later, when querying metrics endpoint for a db
   // we can get some results which are for other dbs eg. searching for db called
   // "service-one" will bring back dbs/collections belonging to "service-one-frontend"
-  final case class DbMapping(service: String, database: String, filterOut: Seq[String])
+  final case class DbMapping(service: ServiceName, database: String, filterOut: Seq[String])
 }

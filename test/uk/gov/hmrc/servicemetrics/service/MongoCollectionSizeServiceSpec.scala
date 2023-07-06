@@ -23,6 +23,7 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.MongoCollectionSizeRepository
 import uk.gov.hmrc.servicemetrics.service.MongoCollectionSizeService.DbMapping
@@ -66,14 +67,14 @@ class MongoCollectionSizeServiceSpec
   "getMappings" should {
     "map a database to a service taking into account overrides and similarly named dbs" in {
       val databases = Seq("service-one", "service-one-frontend", "service-two", "random-db")
-      val knownServices = Seq("service-one", "service-two", "service-one-frontend", "service-three")
+      val knownServices = Seq("service-one", "service-two", "service-one-frontend", "service-three").map(ServiceName.apply)
       val dbOverrides = Seq(DbOverride("service-three", Seq("random-db")))
 
       val expected = Seq(
-        DbMapping("service-one", "service-one", Seq("service-one-frontend")),
-        DbMapping("service-one-frontend", "service-one-frontend", Seq.empty),
-        DbMapping("service-two", "service-two", Seq.empty),
-        DbMapping("service-three", "random-db", Seq.empty)
+        DbMapping(ServiceName("service-one"), "service-one", Seq("service-one-frontend")),
+        DbMapping(ServiceName("service-one-frontend"), "service-one-frontend", Seq.empty),
+        DbMapping(ServiceName("service-two"), "service-two", Seq.empty),
+        DbMapping(ServiceName("service-three"), "random-db", Seq.empty)
       )
 
       service.getMappings(databases, knownServices, dbOverrides) should contain theSameElementsAs expected
