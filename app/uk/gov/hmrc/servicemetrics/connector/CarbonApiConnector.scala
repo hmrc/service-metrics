@@ -22,7 +22,7 @@ import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.{DatabaseName, MongoCollectionSizeMetric}
+import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.MongoCollectionSizeMetric
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
@@ -39,24 +39,14 @@ class CarbonApiConnector @Inject()(
 
   private val carbonApiBaseUrl: String = servicesConfig.baseUrl("carbon-api")
 
-  def getMongoMetrics(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[MongoCollectionSizeMetric]] = {
+  def getCollectionSizes(environment: Environment, database: String)(implicit hc: HeaderCarrier): Future[Seq[MongoCollectionSizeMetric]] = {
     val baseUrl = carbonApiBaseUrl.replace("$env", environment.asString)
 
     implicit val mmr: Reads[MongoCollectionSizeMetric] = MongoCollectionSizeMetric.reads
 
     httpClientV2
-      .get(url"$baseUrl/render?target=groupByNode(collectd.*_mongo_*.mongo-*.file_size-data,2,'max')&from=now-1h&to=now&format=json&maxDataPoints=1")
+      .get(url"$baseUrl/render?target=groupByNode(collectd.*_mongo_*.mongo-$database-*.file_size-data,2,'max')&from=now-1h&to=now&format=json&maxDataPoints=1")
       .execute[Seq[MongoCollectionSizeMetric]]
-  }
-
-  def getDatabaseNames(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[DatabaseName]] = {
-    val baseUrl = carbonApiBaseUrl.replace("$env", environment.asString)
-
-    implicit val dbR = DatabaseName.reads
-
-    httpClientV2
-      .get(url"$baseUrl/metrics/find?query=collectd.*_mongo_*.mongo-usage.*&from=now-1h&until=now")
-      .execute[Seq[DatabaseName]]
   }
 
 }
@@ -69,13 +59,6 @@ object CarbonApiConnector {
       ~ (__ \ "datapoints" \ 0 \ 0).read[BigDecimal]
       ~ (__ \ "datapoints" \ 0 \ 1).read[Long].map(Instant.ofEpochSecond)
       )(apply _)
-  }
-
-  case class DatabaseName(value: String) extends AnyVal
-
-  object DatabaseName {
-    val reads: Reads[DatabaseName] =
-      Reads.at[String](__ \ "text").map(DatabaseName(_))
   }
 }
 

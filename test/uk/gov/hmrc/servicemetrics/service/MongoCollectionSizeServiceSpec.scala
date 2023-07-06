@@ -18,16 +18,15 @@ package uk.gov.hmrc.servicemetrics.service
 
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, GitHubProxyConnector, TeamsAndRepositoriesConnector}
+import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, ClickHouseConnector, GitHubProxyConnector, TeamsAndRepositoriesConnector}
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
-import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.MongoCollectionSizeMetric
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.MongoCollectionSizeRepository
+import uk.gov.hmrc.servicemetrics.service.MongoCollectionSizeService.DbMapping
 
-import java.time.{Instant, LocalDate}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -38,112 +37,47 @@ class MongoCollectionSizeServiceSpec
   with ScalaFutures
   with IntegrationPatience {
 
+  private val mockCarbonApiConnector     = mock[CarbonApiConnector]
+  private val mockClickHouseConnector    = mock[ClickHouseConnector]
   private val mockTeamsAndReposConnector = mock[TeamsAndRepositoriesConnector]
+  private val mockGitHubProxyConnector   = mock[GitHubProxyConnector]
   private val mockRepository             = mock[MongoCollectionSizeRepository]
 
   private val service = new MongoCollectionSizeService(
-    mock[CarbonApiConnector],
+    mockCarbonApiConnector,
+    mockClickHouseConnector,
     mockTeamsAndReposConnector,
-    mock[GitHubProxyConnector],
+    mockGitHubProxyConnector,
     mockRepository
   )
 
   "updateCollectionSizes" should {
     "leave the db unchanged if gathering metrics fails" in {
-      when(mockTeamsAndReposConnector.allServices()(any[HeaderCarrier])).thenReturn(Future.failed(new RuntimeException("test exception")))
+      when(mockClickHouseConnector.getDatabaseNames(any[Environment])(any[HeaderCarrier])).thenReturn(Future.failed(new RuntimeException("test exception")))
 
       implicit val hc: HeaderCarrier = HeaderCarrier()
       service.updateCollectionSizes(Environment.QA)
 
-      verify(mockTeamsAndReposConnector, times(1)).allServices()
+      verify(mockClickHouseConnector, times(1)).getDatabaseNames(any[Environment])(any[HeaderCarrier])
       verifyZeroInteractions(mockRepository.putAll(anySeq[MongoCollectionSize], any[Environment]))
     }
   }
 
-  "transform" should {
-    "return MongoCollectionSize for a service" in {
-      val env             = Environment.QA
-      val metric          = MongoCollectionSizeMetric("mongo-service-collection-one", BigDecimal(1000), Instant.ofEpochSecond(1675353600))
-      val dbsLongestFirst = Seq("service-frontend", "service")
-      val dbOverrides     = Seq.empty
-      val knownServices   = Seq("service-frontend", "service")
+  "getMappings" should {
+    "map a database to a service taking into account overrides and similarly named dbs" in {
+      val databases = Seq("service-one", "service-one-frontend", "service-two", "random-db")
+      val knownServices = Seq("service-one", "service-two", "service-one-frontend", "service-three")
+      val dbOverrides = Seq(DbOverride("service-three", Seq("random-db")))
 
       val expected = Seq(
-        MongoCollectionSize(
-          database    = "service",
-          collection  = "collection-one",
-          sizeBytes   = BigDecimal(1000),
-          date        = LocalDate.of(2023, 2, 2),
-          environment = Environment.QA,
-          service     = Some("service")
-        )
+        DbMapping("service-one", "service-one", Seq("service-one-frontend")),
+        DbMapping("service-one-frontend", "service-one-frontend", Seq.empty),
+        DbMapping("service-two", "service-two", Seq.empty),
+        DbMapping("service-three", "random-db", Seq.empty)
       )
 
-      service.transform(env, metric, dbsLongestFirst, dbOverrides, knownServices) shouldBe Some(expected)
-
+      service.getMappings(databases, knownServices, dbOverrides) should contain theSameElementsAs expected
     }
-
-    "return service name from override when present" in {
-      val env = Environment.QA
-      val metric = MongoCollectionSizeMetric("mongo-keystore-collection-one", BigDecimal(1000), Instant.ofEpochSecond(1675353600))
-      val dbsLongestFirst = Seq("keystore")
-      val dbOverrides     = Seq(DbOverride("key-store", Seq("keystore")))
-      val knownServices   = Seq("key-store")
-
-      val expected = Seq(
-        MongoCollectionSize(
-          database = "keystore",
-          collection = "collection-one",
-          sizeBytes = BigDecimal(1000),
-          date = LocalDate.of(2023, 2, 2),
-          environment = Environment.QA,
-          service = Some("key-store")
-        )
-      )
-
-      service.transform(env, metric, dbsLongestFirst, dbOverrides, knownServices) shouldBe Some(expected)
-    }
-
-    "return multiple results when the database is shared between two services" in {
-      val env = Environment.QA
-      val metric = MongoCollectionSizeMetric("mongo-shared-db-collection-one", BigDecimal(1000), Instant.ofEpochSecond(1675353600))
-      val dbsLongestFirst = Seq("shared-db")
-      val dbOverrides     = Seq(DbOverride("service-one", Seq("shared-db")), DbOverride("service-two", Seq("shared-db")))
-      val knownServices   = Seq("service-one", "service-two")
-
-      val expected = Seq(
-        MongoCollectionSize(
-          database = "shared-db",
-          collection = "collection-one",
-          sizeBytes = BigDecimal(1000),
-          date = LocalDate.of(2023, 2, 2),
-          environment = Environment.QA,
-          service = Some("service-one")
-        ),
-        MongoCollectionSize(
-          database = "shared-db",
-          collection = "collection-one",
-          sizeBytes = BigDecimal(1000),
-          date = LocalDate.of(2023, 2, 2),
-          environment = Environment.QA,
-          service = Some("service-two")
-        )
-      )
-
-      service.transform(env, metric, dbsLongestFirst, dbOverrides, knownServices).get should contain theSameElementsAs expected
-    }
-
-    "return None when has no collection name" in {
-      val env = Environment.QA
-      val metric = MongoCollectionSizeMetric("mongo-service", BigDecimal(1000), Instant.ofEpochSecond(1675353600))
-      val dbsLongestFirst = Seq("service-frontend", "service")
-      val dbOverrides = Seq.empty
-      val knownServices = Seq("service-frontend", "service")
-
-      service.transform(env, metric, dbsLongestFirst, dbOverrides, knownServices) shouldBe None
-    }
-
-
   }
 
 }

@@ -24,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.{DatabaseName, MongoCollectionSizeMetric}
+import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.MongoCollectionSizeMetric
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
@@ -82,7 +82,7 @@ class CarbonApiConnectorSpec
           |]""".stripMargin
 
       stubFor(
-        get(urlEqualTo("/render?target=groupByNode(collectd.*_mongo_*.mongo-*.file_size-data,2,'max')&from=now-1h&to=now&format=json&maxDataPoints=1"))
+        get(urlEqualTo("/render?target=groupByNode(collectd.*_mongo_*.mongo-service-one-*.file_size-data,2,'max')&from=now-1h&to=now&format=json&maxDataPoints=1"))
           .willReturn(
             aResponse()
               .withStatus(200)
@@ -103,51 +103,7 @@ class CarbonApiConnectorSpec
         )
       )
 
-      val response = connector.getMongoMetrics(Environment.QA).futureValue
-
-      response should contain theSameElementsAs expected
-    }
-  }
-
-  "getDatabaseNames" should {
-    "return a list of database names" in {
-
-      val rawResponse =
-        """
-          |[
-          |  {
-          |    "allowChildren": 1,
-          |    "expandable": 1,
-          |    "leaf": 0,
-          |    "id": "collectd.*_mongo_*.mongo-usage.service-one",
-          |    "text": "service-one",
-          |    "context": {}
-          |  },
-          |  {
-          |    "allowChildren": 1,
-          |    "expandable": 1,
-          |    "leaf": 0,
-          |    "id": "collectd.*_mongo_*.mongo-usage.service-two",
-          |    "text": "service-two",
-          |    "context": {}
-          |  }
-          |]""".stripMargin
-
-      stubFor(
-        get(urlEqualTo("/metrics/find?query=collectd.*_mongo_*.mongo-usage.*&from=now-1h&until=now"))
-          .willReturn(
-            aResponse()
-              .withStatus(200)
-              .withBody(rawResponse)
-          )
-      )
-
-      val expected = Seq(
-        DatabaseName("service-one"),
-        DatabaseName("service-two")
-      )
-
-      val response = connector.getDatabaseNames(Environment.QA).futureValue
+      val response = connector.getCollectionSizes(Environment.QA, "service-one").futureValue
 
       response should contain theSameElementsAs expected
     }

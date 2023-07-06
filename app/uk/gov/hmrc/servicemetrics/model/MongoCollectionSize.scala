@@ -28,7 +28,7 @@ case class MongoCollectionSize(
 , sizeBytes   : BigDecimal
 , date        : LocalDate
 , environment : Environment
-, service     : Option[String]
+, service     : String
 )
 
 object MongoCollectionSize {
@@ -40,7 +40,7 @@ object MongoCollectionSize {
     ~ (__ \ "sizeBytes"  ).format[BigDecimal]
     ~ (__ \ "date"       ).format[LocalDate]
     ~ (__ \ "environment").format[Environment]
-    ~ (__ \ "service"    ).formatNullable[String]
+    ~ (__ \ "service"    ).format[String]
     )(apply, unlift(unapply))
   }
 
@@ -51,7 +51,7 @@ object MongoCollectionSize {
     ~ (__ \ "sizeBytes"  ).write[BigDecimal]
     ~ (__ \ "date"       ).write[LocalDate]
     ~ (__ \ "environment").write[Environment]
-    ~ (__ \ "service"    ).writeNullable[String]
+    ~ (__ \ "service"    ).write[String]
     )(unlift(unapply))
   }
 }
