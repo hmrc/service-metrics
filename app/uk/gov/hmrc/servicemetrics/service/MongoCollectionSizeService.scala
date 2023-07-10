@@ -16,6 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.service
 
+import cats.implicits._
 import play.api.Logger
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
@@ -51,7 +52,9 @@ class MongoCollectionSizeService @Inject()(
       services    <- teamsAndRepositoriesConnector.allServices()
       dbOverrides <- gitHubProxyConnector.getMongoOverrides(environment)
       mappings    =  getMappings(databases, services, dbOverrides)
-      collSizes   <- Future.traverse(mappings)(mapping => getCollectionSizes(mapping, environment)).map(_.flatten)
+      collSizes   <- mappings.foldLeftM[Future, Seq[MongoCollectionSize]](Seq.empty){
+                       (acc, mapping) => getCollectionSizes(mapping, environment).map(acc ++ _)
+                     }
       _           <- mongoCollectionSizeRepository.putAll(collSizes, environment)
     } yield logger.info(s"Successfully updated mongo collection sizes for ${environment.asString}")
   }
