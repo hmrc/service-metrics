@@ -19,14 +19,15 @@ package uk.gov.hmrc.servicemetrics.service
 import cats.implicits._
 import play.api.Logger
 import uk.gov.hmrc.http.HeaderCarrier
+import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
 import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, ClickHouseConnector, GitHubProxyConnector, TeamsAndRepositoriesConnector}
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.MongoCollectionSizeRepository
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository}
 import uk.gov.hmrc.servicemetrics.service.MongoCollectionSizeService.DbMapping
 
-import java.time.ZoneOffset
+import java.time.{LocalDate, ZoneOffset}
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -36,7 +37,9 @@ class MongoCollectionSizeService @Inject()(
 , clickHouseConnector           : ClickHouseConnector
 , teamsAndRepositoriesConnector : TeamsAndRepositoriesConnector
 , gitHubProxyConnector          : GitHubProxyConnector
-, mongoCollectionSizeRepository : MongoCollectionSizeRepository
+, latestRepository              : LatestMongoCollectionSizeRepository
+, historyRepository             : MongoCollectionSizeHistoryRepository
+, appConfig                     : AppConfig
 )(implicit
   ec: ExecutionContext
 ) {
@@ -44,7 +47,7 @@ class MongoCollectionSizeService @Inject()(
   private val logger = Logger(getClass)
 
   def getCollections(service: String, environment: Option[Environment]): Future[Seq[MongoCollectionSize]] =
-    mongoCollectionSizeRepository.find(service, environment)
+    latestRepository.find(service, environment)
 
   def updateCollectionSizes(environment: Environment)(implicit hc: HeaderCarrier): Future[Unit] = {
     for {
@@ -55,9 +58,17 @@ class MongoCollectionSizeService @Inject()(
       collSizes   <- mappings.foldLeftM[Future, Seq[MongoCollectionSize]](Seq.empty){
                        (acc, mapping) => getCollectionSizes(mapping, environment).map(acc ++ _)
                      }
-      _           <- mongoCollectionSizeRepository.putAll(collSizes, environment)
+      _           <- latestRepository.putAll(collSizes, environment)
+      _           <- storeHistory(collSizes, environment)
     } yield logger.info(s"Successfully updated mongo collection sizes for ${environment.asString}")
   }
+
+  private[service] def storeHistory(mcs: Seq[MongoCollectionSize], environment: Environment): Future[Unit] =
+    for {
+      afterDate     <- Future.successful(LocalDate.now().minusDays(appConfig.collectionSizesHistoryFrequencyDays))
+      alreadyStored <- historyRepository.historyExists(environment, afterDate)
+      _             <- if (alreadyStored) Future.unit else historyRepository.insertMany(mcs)
+    } yield ()
 
   private[service] def getCollectionSizes(
     mapping    : DbMapping
@@ -83,9 +94,9 @@ class MongoCollectionSizeService @Inject()(
       }
 
   private[service] def getMappings(
-    databases: Seq[String]
+    databases    : Seq[String]
   , knownServices: Seq[ServiceName]
-  , dbOverrides: Seq[DbOverride]
+  , dbOverrides  : Seq[DbOverride]
   ): Seq[DbMapping] =
     for {
       database  <- databases

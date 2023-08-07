@@ -22,12 +22,14 @@ import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, ClickHouseConne
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import uk.gov.hmrc.http.HeaderCarrier
+import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.MongoCollectionSizeRepository
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository}
 import uk.gov.hmrc.servicemetrics.service.MongoCollectionSizeService.DbMapping
 
+import java.time.LocalDate
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -38,34 +40,73 @@ class MongoCollectionSizeServiceSpec
   with ScalaFutures
   with IntegrationPatience {
 
-  private val mockCarbonApiConnector     = mock[CarbonApiConnector]
-  private val mockClickHouseConnector    = mock[ClickHouseConnector]
-  private val mockTeamsAndReposConnector = mock[TeamsAndRepositoriesConnector]
-  private val mockGitHubProxyConnector   = mock[GitHubProxyConnector]
-  private val mockRepository             = mock[MongoCollectionSizeRepository]
+  trait Setup {
+    val mockCarbonApiConnector     = mock[CarbonApiConnector]
+    val mockClickHouseConnector    = mock[ClickHouseConnector]
+    val mockTeamsAndReposConnector = mock[TeamsAndRepositoriesConnector]
+    val mockGitHubProxyConnector   = mock[GitHubProxyConnector]
+    val mockLatestRepository       = mock[LatestMongoCollectionSizeRepository]
+    val mockHistoryRepository      = mock[MongoCollectionSizeHistoryRepository]
+    val mockAppConfig              = mock[AppConfig]
 
-  private val service = new MongoCollectionSizeService(
-    mockCarbonApiConnector,
-    mockClickHouseConnector,
-    mockTeamsAndReposConnector,
-    mockGitHubProxyConnector,
-    mockRepository
-  )
+    val service = new MongoCollectionSizeService(
+      mockCarbonApiConnector,
+      mockClickHouseConnector,
+      mockTeamsAndReposConnector,
+      mockGitHubProxyConnector,
+      mockLatestRepository,
+      mockHistoryRepository,
+      mockAppConfig
+    )
+  }
 
   "updateCollectionSizes" should {
-    "leave the db unchanged if gathering metrics fails" in {
+    "leave the db unchanged if gathering metrics fails" in new Setup {
       when(mockClickHouseConnector.getDatabaseNames(any[Environment])(any[HeaderCarrier])).thenReturn(Future.failed(new RuntimeException("test exception")))
 
       implicit val hc: HeaderCarrier = HeaderCarrier()
-      service.updateCollectionSizes(Environment.QA)
+      service.updateCollectionSizes(Environment.QA).failed.futureValue shouldBe a[RuntimeException]
 
-      verify(mockClickHouseConnector, times(1)).getDatabaseNames(any[Environment])(any[HeaderCarrier])
-      verifyZeroInteractions(mockRepository.putAll(anySeq[MongoCollectionSize], any[Environment]))
+      verify(mockClickHouseConnector, times(1)).getDatabaseNames(Environment.QA)(hc)
+      verifyZeroInteractions(mockLatestRepository)
+    }
+  }
+
+  "storeHistory" should {
+    "insert records when none exist" in new Setup {
+      when(mockAppConfig.collectionSizesHistoryFrequencyDays).thenReturn(1)
+
+      when(mockHistoryRepository.historyExists(any[Environment], any[LocalDate]))
+        .thenReturn(Future.successful(false))
+
+      when(mockHistoryRepository.insertMany(anySeq[MongoCollectionSize]))
+        .thenReturn(Future.unit)
+
+      val mcs = Seq(MongoCollectionSize("database", "collection", BigDecimal(1000), LocalDate.now(), Environment.QA, "service"))
+
+      service.storeHistory(mcs, Environment.QA).futureValue
+
+      verify(mockHistoryRepository, times(1)).historyExists(Environment.QA, LocalDate.now().minusDays(1))
+      verify(mockHistoryRepository, times(1)).insertMany(mcs)
+    }
+
+    "skip the insert if history already exists" in new Setup {
+      when(mockAppConfig.collectionSizesHistoryFrequencyDays).thenReturn(1)
+
+      when(mockHistoryRepository.historyExists(any[Environment], any[LocalDate]))
+        .thenReturn(Future.successful(true))
+
+      val mcs = Seq(MongoCollectionSize("database", "collection", BigDecimal(1000), LocalDate.now(), Environment.QA, "service"))
+
+      service.storeHistory(mcs, Environment.QA).futureValue
+
+      verify(mockHistoryRepository, times(1)).historyExists(Environment.QA, LocalDate.now().minusDays(1))
+      verify(mockHistoryRepository, times(0)).insertMany(mcs)
     }
   }
 
   "getMappings" should {
-    "map a database to a service taking into account overrides and similarly named dbs" in {
+    "map a database to a service taking into account overrides and similarly named dbs" in new Setup {
       val databases = Seq("service-one", "service-one-frontend", "service-two", "random-db")
       val knownServices = Seq("service-one", "service-two", "service-one-frontend", "service-three").map(ServiceName.apply)
       val dbOverrides = Seq(DbOverride("service-three", Seq("random-db")))

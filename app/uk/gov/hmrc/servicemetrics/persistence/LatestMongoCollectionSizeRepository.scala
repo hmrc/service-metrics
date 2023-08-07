@@ -26,15 +26,15 @@ import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class MongoCollectionSizeRepository @Inject()(
+class LatestMongoCollectionSizeRepository @Inject()(
   override val mongoComponent: MongoComponent
 )(implicit
   ec: ExecutionContext
 ) extends PlayMongoRepository(
   mongoComponent = mongoComponent,
-  collectionName = MongoCollectionSizeRepository.collectionName,
+  collectionName = LatestMongoCollectionSizeRepository.collectionName,
   domainFormat   = MongoCollectionSize.mongoFormat,
-  indexes        = MongoCollectionSizeRepository.indexes
+  indexes        = LatestMongoCollectionSizeRepository.indexes
 ) with Transactions {
 
   // all records are deleted before inserting fresh on schedule
@@ -62,7 +62,7 @@ class MongoCollectionSizeRepository @Inject()(
     }
 }
 
-object MongoCollectionSizeRepository {
+object LatestMongoCollectionSizeRepository {
   val collectionName = "latestMongoCollectionSizes"
 
   val indexes: Seq[IndexModel] =

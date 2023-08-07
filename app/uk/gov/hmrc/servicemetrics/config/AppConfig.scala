@@ -23,4 +23,6 @@ import play.api.Configuration
 class AppConfig @Inject()(config: Configuration) {
 
   val appName: String = config.get[String]("appName")
+
+  lazy val collectionSizesHistoryFrequencyDays: Int = config.get[Int]("mongo-collection-size-history.frequency.days")
 }
