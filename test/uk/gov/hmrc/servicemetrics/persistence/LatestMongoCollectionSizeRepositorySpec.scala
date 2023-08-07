@@ -24,15 +24,15 @@ import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import java.time.LocalDate
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class MongoCollectionSizeRepositorySpec
+class LatestMongoCollectionSizeRepositorySpec
   extends AnyWordSpec
   with Matchers
   with DefaultPlayMongoRepositorySupport[MongoCollectionSize] {
 
-  override lazy val repository = new MongoCollectionSizeRepository(mongoComponent)
+  override lazy val repository = new LatestMongoCollectionSizeRepository(mongoComponent)
 
   private def seed(env: Environment) = Seq(
-    MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now, env, "service-one")
+    MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now(), env, "service-one")
   )
 
   "putAll" should {
