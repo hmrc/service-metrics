@@ -81,15 +81,15 @@ object MongoCollectionSizeHistoryRepository {
     Seq(
       IndexModel(Indexes.ascending("service")),
       IndexModel(Indexes.ascending("environment")),
-      IndexModel(Indexes.ascending("date"), IndexOptions().expireAfter(90, TimeUnit.DAYS)),
-      IndexModel(
-        Indexes.compoundIndex(
-          Indexes.ascending("database"),
-          Indexes.ascending("collection"),
-          Indexes.ascending("environment"),
-          Indexes.ascending("date")
-        ),
-        IndexOptions().unique(true).background(true)
-      )
+      IndexModel(Indexes.ascending("date"), IndexOptions().expireAfter(90, TimeUnit.DAYS))
+//      IndexModel(
+//        Indexes.compoundIndex(
+//          Indexes.ascending("database"),
+//          Indexes.ascending("collection"),
+//          Indexes.ascending("environment"),
+//          Indexes.ascending("date")
+//        ),
+//        IndexOptions().unique(true).background(true)
+//      )
     )
 }
