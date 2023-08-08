@@ -82,8 +82,10 @@ object MongoCollectionSizeHistoryRepository {
       IndexModel(Indexes.ascending("service")),
       IndexModel(Indexes.ascending("environment")),
       IndexModel(Indexes.ascending("date"), IndexOptions().expireAfter(90, TimeUnit.DAYS)),
+      // ensure only one datapoint per collection per day is stored
       IndexModel(
         Indexes.compoundIndex(
+          Indexes.ascending("service"), // multiple services can share the same database
           Indexes.ascending("database"),
           Indexes.ascending("collection"),
           Indexes.ascending("environment"),
