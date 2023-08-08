@@ -71,10 +71,10 @@ object LatestMongoCollectionSizeRepository {
       IndexModel(Indexes.ascending("environment")),
       IndexModel(
         Indexes.compoundIndex(
+          Indexes.ascending("service"), // multiple services can share the same database
           Indexes.ascending("database"),
           Indexes.ascending("collection"),
-          Indexes.ascending("environment"),
-          Indexes.ascending("date")
+          Indexes.ascending("environment")
         ),
         IndexOptions().unique(true).background(true)
       )
