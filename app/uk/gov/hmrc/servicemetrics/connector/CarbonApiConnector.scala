@@ -44,8 +44,11 @@ class CarbonApiConnector @Inject()(
 
     implicit val mmr: Reads[MongoCollectionSizeMetric] = MongoCollectionSizeMetric.reads
 
+    val to   = Instant.now()
+    val from = to.minusSeconds(3600)
+
     httpClientV2
-      .get(url"$baseUrl/render?target=groupByNode(collectd.*_mongo_*.mongo-$database-*.file_size-data,2,'max')&from=now-1h&to=now&format=json&maxDataPoints=1")
+      .get(url"$baseUrl/render?target=groupByNode(collectd.*_mongo_*.mongo-$database-*.file_size-data,2,'max')&from=${from.getEpochSecond}&to=${to.getEpochSecond}&format=json&maxDataPoints=1")
       .execute[Seq[MongoCollectionSizeMetric]]
   }
 

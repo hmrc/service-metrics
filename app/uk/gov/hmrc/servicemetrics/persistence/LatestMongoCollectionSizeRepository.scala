@@ -67,7 +67,16 @@ object LatestMongoCollectionSizeRepository {
 
   val indexes: Seq[IndexModel] =
     Seq(
-      IndexModel(Indexes.ascending("service"), IndexOptions().name("mcsServiceIdx").sparse(true)),
-      IndexModel(Indexes.ascending("environment"), IndexOptions().name("mcsEnvironmentIdx"))
+      IndexModel(Indexes.ascending("service")),
+      IndexModel(Indexes.ascending("environment")),
+      IndexModel(
+        Indexes.compoundIndex(
+          Indexes.ascending("database"),
+          Indexes.ascending("collection"),
+          Indexes.ascending("environment"),
+          Indexes.ascending("date")
+        ),
+        IndexOptions().unique(true).background(true)
+      )
     )
 }
