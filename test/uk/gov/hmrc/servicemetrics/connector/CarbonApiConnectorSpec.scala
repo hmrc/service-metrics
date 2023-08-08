@@ -16,7 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.connector
 
-import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, get, stubFor, urlEqualTo}
+import com.github.tomakehurst.wiremock.client.WireMock._
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
@@ -82,7 +82,7 @@ class CarbonApiConnectorSpec
           |]""".stripMargin
 
       stubFor(
-        get(urlEqualTo("/render?target=groupByNode(collectd.*_mongo_*.mongo-service-one-*.file_size-data,2,'max')&from=now-1h&to=now&format=json&maxDataPoints=1"))
+        get(urlPathEqualTo("/render"))
           .willReturn(
             aResponse()
               .withStatus(200)

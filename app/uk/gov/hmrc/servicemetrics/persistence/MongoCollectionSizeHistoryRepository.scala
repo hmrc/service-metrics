@@ -79,8 +79,17 @@ object MongoCollectionSizeHistoryRepository {
 
   val indexes: Seq[IndexModel] =
     Seq(
-      IndexModel(Indexes.ascending("service"), IndexOptions().name("histServiceIdx").sparse(true)),
-      IndexModel(Indexes.ascending("environment"), IndexOptions().name("histEnvironmentIdx")),
-      IndexModel(Indexes.ascending("date"), IndexOptions().name("histDateIdx").expireAfter(90, TimeUnit.DAYS))
+      IndexModel(Indexes.ascending("service")),
+      IndexModel(Indexes.ascending("environment")),
+      IndexModel(Indexes.ascending("date"), IndexOptions().expireAfter(90, TimeUnit.DAYS)),
+      IndexModel(
+        Indexes.compoundIndex(
+          Indexes.ascending("database"),
+          Indexes.ascending("collection"),
+          Indexes.ascending("environment"),
+          Indexes.ascending("date")
+        ),
+        IndexOptions().unique(true).background(true)
+      )
     )
 }
