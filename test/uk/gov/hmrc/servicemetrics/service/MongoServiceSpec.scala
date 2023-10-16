@@ -18,7 +18,7 @@ package uk.gov.hmrc.servicemetrics.service
 
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import uk.gov.hmrc.servicemetrics.connector.{CarbonApiConnector, ClickHouseConnector, GitHubProxyConnector, TeamsAndRepositoriesConnector}
+import uk.gov.hmrc.servicemetrics.connector._
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import uk.gov.hmrc.http.HeaderCarrier
@@ -26,14 +26,14 @@ import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository}
-import uk.gov.hmrc.servicemetrics.service.MongoCollectionSizeService.DbMapping
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository}
+import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
 
 import java.time.LocalDate
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
-class MongoCollectionSizeServiceSpec
+class MongoServiceSpec
   extends AnyWordSpec
   with Matchers
   with MockitoSugar
@@ -41,21 +41,25 @@ class MongoCollectionSizeServiceSpec
   with IntegrationPatience {
 
   trait Setup {
-    val mockCarbonApiConnector     = mock[CarbonApiConnector]
-    val mockClickHouseConnector    = mock[ClickHouseConnector]
-    val mockTeamsAndReposConnector = mock[TeamsAndRepositoriesConnector]
-    val mockGitHubProxyConnector   = mock[GitHubProxyConnector]
-    val mockLatestRepository       = mock[LatestMongoCollectionSizeRepository]
-    val mockHistoryRepository      = mock[MongoCollectionSizeHistoryRepository]
-    val mockAppConfig              = mock[AppConfig]
+    val mockCarbonApiConnector        = mock[CarbonApiConnector]
+    val mockClickHouseConnector       = mock[ClickHouseConnector]
+    val mockElasticsearchConnector    = mock[ElasticsearchConnector]
+    val mockTeamsAndReposConnector    = mock[TeamsAndRepositoriesConnector]
+    val mockGitHubProxyConnector      = mock[GitHubProxyConnector]
+    val mockLatestRepository          = mock[LatestMongoCollectionSizeRepository]
+    val mockHistoryRepository         = mock[MongoCollectionSizeHistoryRepository]
+    val mockQueryLogHistoryRepository = mock[MongoQueryLogHistoryRepository]
+    val mockAppConfig                 = mock[AppConfig]
 
-    val service = new MongoCollectionSizeService(
+    val service = new MongoService(
       mockCarbonApiConnector,
       mockClickHouseConnector,
+      mockElasticsearchConnector,
       mockTeamsAndReposConnector,
       mockGitHubProxyConnector,
       mockLatestRepository,
       mockHistoryRepository,
+      mockQueryLogHistoryRepository,
       mockAppConfig
     )
   }
@@ -64,11 +68,58 @@ class MongoCollectionSizeServiceSpec
     "leave the db unchanged if gathering metrics fails" in new Setup {
       when(mockClickHouseConnector.getDatabaseNames(any[Environment])(any[HeaderCarrier])).thenReturn(Future.failed(new RuntimeException("test exception")))
 
-      implicit val hc: HeaderCarrier = HeaderCarrier()
+      implicit val hc: HeaderCarrier = new HeaderCarrier()
       service.updateCollectionSizes(Environment.QA).failed.futureValue shouldBe a[RuntimeException]
 
       verify(mockClickHouseConnector, times(1)).getDatabaseNames(Environment.QA)(hc)
       verifyZeroInteractions(mockLatestRepository)
+    }
+  }
+
+  "insertQueryLogs" should {
+    "insert mongodb logs" when {
+      "there are slow queries in ES" in new Setup {
+        val databases = Seq("service-one")
+        val knownServices = Seq("service-one").map(ServiceName.apply)
+
+        implicit val hc: HeaderCarrier = new HeaderCarrier()
+
+        when(mockClickHouseConnector.getDatabaseNames(any[Environment])(any[HeaderCarrier]))
+          .thenReturn(Future.successful(databases))
+
+        when(mockTeamsAndReposConnector.allServices()(any[HeaderCarrier]))
+          .thenReturn(Future.successful(knownServices))
+
+        when(mockGitHubProxyConnector.getMongoOverrides(any[Environment])(any[HeaderCarrier]))
+          .thenReturn(Future.successful(Seq.empty))
+
+        when(mockElasticsearchConnector.getSlowQueries(any[Environment], any[String])(any[HeaderCarrier]))
+          .thenReturn(Future.successful(Seq(
+            ElasticsearchConnector.MongoQueryLog(
+              java.time.Instant.now,
+              "collection",
+              "database",
+              "mongoDb",
+              "{}",
+              3001,
+            )
+          )))
+
+        when(mockElasticsearchConnector.getNonIndexedQueries(any[Environment], any[String])(any[HeaderCarrier]))
+          .thenReturn(Future.successful(Seq.empty))
+
+        when(mockQueryLogHistoryRepository.insertMany(any[Seq[MongoQueryLogHistoryRepository.MongoQueryLogHistory]]))
+          .thenReturn(Future.unit)
+
+        service.insertQueryLogs(Environment.QA).futureValue shouldBe a[Unit]
+
+        verify(mockClickHouseConnector, times(1)).getDatabaseNames(Environment.QA)(hc)
+        verify(mockTeamsAndReposConnector, times(1)).allServices()(hc)
+        verify(mockGitHubProxyConnector, times(1)).getMongoOverrides(Environment.QA)(hc)
+        verify(mockElasticsearchConnector, times(1)).getSlowQueries(Environment.QA, "service-one")(hc)
+        verify(mockElasticsearchConnector, times(1)).getNonIndexedQueries(Environment.QA, "service-one")(hc)
+        verify(mockQueryLogHistoryRepository, times(1)).insertMany(anySeq[MongoQueryLogHistoryRepository.MongoQueryLogHistory])
+      }
     }
   }
 
@@ -111,6 +162,17 @@ class MongoCollectionSizeServiceSpec
       val knownServices = Seq("service-one", "service-two", "service-one-frontend", "service-three").map(ServiceName.apply)
       val dbOverrides = Seq(DbOverride("service-three", Seq("random-db")))
 
+      implicit val hc: HeaderCarrier = new HeaderCarrier()
+
+      when(mockClickHouseConnector.getDatabaseNames(any[Environment])(any[HeaderCarrier]))
+      .thenReturn(Future.successful(databases))
+
+      when(mockTeamsAndReposConnector.allServices()(any[HeaderCarrier]))
+      .thenReturn(Future.successful(knownServices))
+
+      when(mockGitHubProxyConnector.getMongoOverrides(any[Environment])(any[HeaderCarrier]))
+      .thenReturn(Future.successful(dbOverrides))
+
       val expected = Seq(
         DbMapping(ServiceName("service-one"), "service-one", Seq("service-one-frontend")),
         DbMapping(ServiceName("service-one-frontend"), "service-one-frontend", Seq.empty),
@@ -118,7 +180,7 @@ class MongoCollectionSizeServiceSpec
         DbMapping(ServiceName("service-three"), "random-db", Seq.empty)
       )
 
-      service.getMappings(databases, knownServices, dbOverrides) should contain theSameElementsAs expected
+      service.getMappings(Environment.QA).futureValue should contain theSameElementsAs expected
     }
   }
 

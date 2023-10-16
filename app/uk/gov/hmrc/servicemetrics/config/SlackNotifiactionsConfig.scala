@@ -16,14 +16,15 @@
 
 package uk.gov.hmrc.servicemetrics.config
 
-import com.google.inject.AbstractModule
-import uk.gov.hmrc.servicemetrics.scheduler.MongoMetricsScheduler
+import javax.inject.{Inject, Singleton}
+import play.api.Configuration
 
-class Module extends AbstractModule {
+@Singleton
+class SlackNotifiactionsConfig @Inject()(configuration: Configuration) {
+  private val slackKey   = "alerts.slack.basicAuth"
+  val username: String   = configuration.get[String](s"$slackKey.username")
+  val password: String   = configuration.get[String](s"$slackKey.password")
+  val enabled : Boolean  = configuration.get[Boolean](s"alerts.slack.enabled")
 
-  override def configure(): Unit = {
-
-    bind(classOf[AppConfig]).asEagerSingleton()
-    bind(classOf[MongoMetricsScheduler]).asEagerSingleton()
-  }
+  val kibanaLinks: Map[String, String] = configuration.get[Map[String, String]]("alerts.slack.kibana.links")
 }

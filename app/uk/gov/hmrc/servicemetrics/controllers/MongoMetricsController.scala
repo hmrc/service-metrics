@@ -20,15 +20,17 @@ import play.api.libs.json.{Json, Writes}
 import play.api.mvc.{Action, AnyContent, ControllerComponents}
 import uk.gov.hmrc.play.bootstrap.backend.controller.BackendController
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.service.MongoCollectionSizeService
+import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository._
+import uk.gov.hmrc.servicemetrics.service.MongoService
 
 import javax.inject.{Inject, Singleton}
+import java.time.Instant
 import scala.concurrent.ExecutionContext
 
 @Singleton()
-class MongoCollectionSizeController @Inject()(
+class MongoMetricsController @Inject()(
 cc: ControllerComponents
-, mongoMetricService: MongoCollectionSizeService
+, mongoMetricService: MongoService
 )(implicit
   ec: ExecutionContext
 ) extends BackendController(cc) {
@@ -38,5 +40,21 @@ cc: ControllerComponents
       implicit val writes: Writes[MongoCollectionSize] = MongoCollectionSize.apiWrites
       mongoMetricService.getCollections(service, environment)
         .map(mcs => Ok(Json.toJson(mcs)))
+    }
+
+  def nonPerformantQueriesByService(
+    service    : String,
+    environment: Option[Environment],
+    from       : Instant,
+    to         : Instant,
+  ): Action[AnyContent] =
+    Action.async {
+      implicit val writes: Writes[NonPerformantQueries] = NonPerformantQueries.format
+      mongoMetricService.nonPerformantQueriesByService(
+          service,
+          environment.getOrElse(Environment.Production),
+          from,
+          to
+        ).map(logs => Ok(Json.toJson(logs)))
     }
 }
