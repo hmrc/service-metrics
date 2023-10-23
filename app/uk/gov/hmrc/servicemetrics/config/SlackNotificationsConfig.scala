@@ -18,13 +18,16 @@ package uk.gov.hmrc.servicemetrics.config
 
 import javax.inject.{Inject, Singleton}
 import play.api.Configuration
+import scala.concurrent.duration.Duration
 
 @Singleton
-class SlackNotifiactionsConfig @Inject()(configuration: Configuration) {
+class SlackNotificationsConfig @Inject()(configuration: Configuration) {
   private val slackKey   = "alerts.slack.basicAuth"
-  val username: String   = configuration.get[String](s"$slackKey.username")
-  val password: String   = configuration.get[String](s"$slackKey.password")
-  val enabled : Boolean  = configuration.get[Boolean](s"alerts.slack.enabled")
+  val username          : String   = configuration.get[String](s"$slackKey.username")
+  val password          : String   = configuration.get[String](s"$slackKey.password")
+  val enabled           : Boolean  = configuration.get[Boolean](s"alerts.slack.enabled")
+  val notificationPeriod: Duration = configuration.get[Duration](s"alerts.slack.notification-period")
+  val throttlingPeriod  : Duration = configuration.get[Duration](s"alerts.slack.throttling-period")
 
   val kibanaLinks: Map[String, String] = configuration.get[Map[String, String]]("alerts.slack.kibana.links")
 }

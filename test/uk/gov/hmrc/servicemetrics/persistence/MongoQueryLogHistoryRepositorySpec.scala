@@ -31,37 +31,36 @@ class MongoQueryLogHistoryRepositorySpec
 
   override lazy val repository = new MongoQueryLogHistoryRepository(mongoComponent)
 
-  private def seed(env: Environment) = Seq(
-    MongoQueryLogHistoryRepository.MongoQueryLogHistory(
-      timestamp   = Instant.now,
-      collection  = "collection",
-      database    = "database",
-      mongoDb     = "mongoDb",
-      operation   = "{}",
-      duration    = 3001,
-      service     = "service",
-      queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
-      environment = env,
+  private def seed(
+      env            : Environment,
+      mongoQueryTypes: Seq[MongoQueryLogHistoryRepository.MongoQueryType]
+    ) = mongoQueryTypes.map(queryType =>
+      MongoQueryLogHistoryRepository.MongoQueryLogHistory(
+        timestamp   = Instant.now,
+        collection  = "collection",
+        database    = "database",
+        mongoDb     = "mongoDb",
+        operation   = "{}",
+        duration    = 3001,
+        service     = "service",
+        queryType   = queryType,
+        environment = env,
+      )
     )
-  )
-
 
   "getAll" should {
     "return results" when {
       "there are non performant queries for an environment" in {
-        val expectedResult = MongoQueryLogHistoryRepository.NonPerformantQueries(
-          "service",
-          Environment.QA,
-          Seq(
-            MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery
-          ),
-        )
+        val environment = Environment.QA
 
-        repository.insertMany(seed(expectedResult.environment)).futureValue
+        repository.insertMany(seed(
+          environment,
+          Seq(MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery)
+        )).futureValue
 
 
         repository.getAll(
-            expectedResult.environment,
+            environment,
             Instant.now().minusSeconds(10),
             Instant.now()
           ).futureValue should not be empty
@@ -76,18 +75,12 @@ class MongoQueryLogHistoryRepositorySpec
           "service",
           Environment.QA,
           Seq(
-            MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery
+            MongoQueryLogHistoryRepository.MongoQueryType.NonIndexedQuery,
+            MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
           ),
         )
 
-        repository.insertMany(seed(expectedResult.environment)).futureValue
-
-
-        repository.getAll(
-            expectedResult.environment,
-            Instant.now().minusSeconds(10),
-            Instant.now()
-          ).futureValue should not be empty
+        repository.insertMany(seed(expectedResult.environment, expectedResult.queryTypes)).futureValue
 
         repository.getQueryTypesByService(
             expectedResult.service,

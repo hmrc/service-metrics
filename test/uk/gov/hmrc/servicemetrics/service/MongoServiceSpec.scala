@@ -26,7 +26,7 @@ import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository}
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository, MongoQueryNotificationRepository}
 import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
 
 import java.time.LocalDate
@@ -41,15 +41,16 @@ class MongoServiceSpec
   with IntegrationPatience {
 
   trait Setup {
-    val mockCarbonApiConnector        = mock[CarbonApiConnector]
-    val mockClickHouseConnector       = mock[ClickHouseConnector]
-    val mockElasticsearchConnector    = mock[ElasticsearchConnector]
-    val mockTeamsAndReposConnector    = mock[TeamsAndRepositoriesConnector]
-    val mockGitHubProxyConnector      = mock[GitHubProxyConnector]
-    val mockLatestRepository          = mock[LatestMongoCollectionSizeRepository]
-    val mockHistoryRepository         = mock[MongoCollectionSizeHistoryRepository]
-    val mockQueryLogHistoryRepository = mock[MongoQueryLogHistoryRepository]
-    val mockAppConfig                 = mock[AppConfig]
+    val mockCarbonApiConnector          = mock[CarbonApiConnector]
+    val mockClickHouseConnector         = mock[ClickHouseConnector]
+    val mockElasticsearchConnector      = mock[ElasticsearchConnector]
+    val mockTeamsAndReposConnector      = mock[TeamsAndRepositoriesConnector]
+    val mockGitHubProxyConnector        = mock[GitHubProxyConnector]
+    val mockLatestRepository            = mock[LatestMongoCollectionSizeRepository]
+    val mockHistoryRepository           = mock[MongoCollectionSizeHistoryRepository]
+    val mockQueryLogHistoryRepository   = mock[MongoQueryLogHistoryRepository]
+    val mockQueryNotificationRepository = mock[MongoQueryNotificationRepository]
+    val mockAppConfig                   = mock[AppConfig]
 
     val service = new MongoService(
       mockCarbonApiConnector,
@@ -60,6 +61,7 @@ class MongoServiceSpec
       mockLatestRepository,
       mockHistoryRepository,
       mockQueryLogHistoryRepository,
+      mockQueryNotificationRepository,
       mockAppConfig
     )
   }

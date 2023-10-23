@@ -59,57 +59,6 @@ class ElasticsearchConnector @Inject()(
     val to   = Instant.now
     val from = to.minusSeconds(elasticsearchConfig.nonPerformantQueriesIntervalInMinutes*60)
 
-    // This is the body that aggregates on the ES side
-    // val body = s"""
-    // {
-    //   "size": 10000,
-    //   "query": {
-    //     "bool": {
-    //       "must": [
-    //         {
-    //           "query_string": {
-    //             "query": "type:mongodb AND $query",
-    //             "analyze_wildcard": true,
-    //             "time_zone": "Europe/London"
-    //           }
-    //         }
-    //       ],
-    //       "filter": [
-    //         {
-    //           "range": {
-    //             "@timestamp": {
-    //               "format": "strict_date_optional_time",
-    //               "gte": "$from",
-    //               "lte": "$to"
-    //             }
-    //           }
-    //         }
-    //       ]
-    //     }
-    //   },
-    //   "aggs":{
-    //       "collection": {
-    //         "terms": {
-    //             "field": "collection.keyword"
-    //         },
-    //         "aggregations": {
-    //           "operation": {
-    //             "terms": {
-    //               "field": "operation.keyword"
-    //             }
-    //           }
-    //         }
-    //       }
-    //     }
-    //   },
-    //   "sort": [
-    //     {
-    //       "@timestamp": {
-    //         "order": "desc"
-    //     }
-    //   ]
-    // }"""
-
     val body = s"""
     {
       "size": 10000,
@@ -118,9 +67,7 @@ class ElasticsearchConnector @Inject()(
           "must": [
             {
               "query_string": {
-                "query": "type:mongodb AND $query",
-                "analyze_wildcard": true,
-                "time_zone": "Europe/London"
+                "query": "type:mongodb AND $query"
               }
             }
           ],
@@ -148,7 +95,7 @@ class ElasticsearchConnector @Inject()(
     httpClientV2
       .post(url"$baseUrl/${elasticsearchConfig.mongoDbIndex}/_search/")(hc.withExtraHeaders(
         "Authentication" -> basicAuthenticationCredentials(environment),
-        "Content-Type" -> "application/json",
+        "Content-Type"   -> "application/json",
       ))
       .withBody(body)
       .execute[JsValue]

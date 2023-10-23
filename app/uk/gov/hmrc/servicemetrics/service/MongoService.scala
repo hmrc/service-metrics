@@ -27,6 +27,7 @@ import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository}
 import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository._
 import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository.MongoQueryLogHistory
+import uk.gov.hmrc.servicemetrics.persistence.MongoQueryNotificationRepository
 import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
 
 import java.time.{Instant, LocalDate, ZoneOffset}
@@ -43,6 +44,7 @@ class MongoService @Inject()(
 , latestRepository              : LatestMongoCollectionSizeRepository
 , historyRepository             : MongoCollectionSizeHistoryRepository
 , queryLogHistoryRepository     : MongoQueryLogHistoryRepository
+, queryNotificationRepository   : MongoQueryNotificationRepository
 , appConfig                     : AppConfig
 )(implicit
   ec: ExecutionContext
@@ -74,7 +76,7 @@ class MongoService @Inject()(
       } yield acc :+ result
     }
 
-  def getAll(
+  def getAllQueries(
     environment: Environment,
     from       : Instant,
     to         : Instant,
@@ -90,6 +92,19 @@ class MongoService @Inject()(
       _           <- queryLogHistoryRepository.insertMany(queryLogs)
     } yield logger.info(s"Successfully updated mongo collection sizes for ${environment.asString}")
   }
+
+  def hasBeenNotified(
+    collection : String,
+    environment: Environment,
+    service    : String,
+    queryType  : MongoQueryType,
+  ): Future[Boolean] =
+    queryNotificationRepository.hasBeenNotified(
+      collection,
+      environment,
+      service,
+      queryType
+    )
 
   private[service] def storeHistory(mcs: Seq[MongoCollectionSize], environment: Environment): Future[Unit] =
     for {
