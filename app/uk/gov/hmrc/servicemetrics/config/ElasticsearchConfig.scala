@@ -29,10 +29,10 @@ class ElasticsearchConfig @Inject() (
   lazy val elasticSearchBaseUrl                 : String                   = servicesConfig.baseUrl("elasticsearch")
   lazy val username                             : String                   = servicesConfig.getString("microservice.services.elasticsearch.username")
   lazy val environmentPasswords                 : Map[Environment, String] = Environment.values.map(env =>
-                                                                              env -> servicesConfig.getString(s"microservice.services.elasticsearch.password.${env.asString}")
+                                                                              env -> servicesConfig.getString(s"microservice.services.elasticsearch.${env.asString}.password")
                                                                              ).toMap
   lazy val mongoDbIndex                         : String                   = servicesConfig.getString("microservice.services.elasticsearch.mongodb-index")
   lazy val longRunningQueryInMilliseconds       : Int                      = servicesConfig.getInt("microservice.services.elasticsearch.long-running-query-in-milliseconds")
-  lazy val nonPerformantQueriesIntervalInMinutes: Int                      = servicesConfig.getInt("microservice.services.elasticsearch.non-performant-queries-interval-in-minute")
+  lazy val nonPerformantQueriesIntervalInMinutes: Int                      = servicesConfig.getInt("microservice.services.elasticsearch.non-performant-queries-interval-in-minutes")
 
 }

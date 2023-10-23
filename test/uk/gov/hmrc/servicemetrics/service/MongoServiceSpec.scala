@@ -26,7 +26,7 @@ import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository}
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository, MongoQueryNotificationRepository}
 import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
 
 import java.time.LocalDate
@@ -41,15 +41,16 @@ class MongoServiceSpec
   with IntegrationPatience {
 
   trait Setup {
-    val mockCarbonApiConnector        = mock[CarbonApiConnector]
-    val mockClickHouseConnector       = mock[ClickHouseConnector]
-    val mockElasticsearchConnector    = mock[ElasticsearchConnector]
-    val mockTeamsAndReposConnector    = mock[TeamsAndRepositoriesConnector]
-    val mockGitHubProxyConnector      = mock[GitHubProxyConnector]
-    val mockLatestRepository          = mock[LatestMongoCollectionSizeRepository]
-    val mockHistoryRepository         = mock[MongoCollectionSizeHistoryRepository]
-    val mockQueryLogHistoryRepository = mock[MongoQueryLogHistoryRepository]
-    val mockAppConfig                 = mock[AppConfig]
+    val mockCarbonApiConnector          = mock[CarbonApiConnector]
+    val mockClickHouseConnector         = mock[ClickHouseConnector]
+    val mockElasticsearchConnector      = mock[ElasticsearchConnector]
+    val mockTeamsAndReposConnector      = mock[TeamsAndRepositoriesConnector]
+    val mockGitHubProxyConnector        = mock[GitHubProxyConnector]
+    val mockLatestRepository            = mock[LatestMongoCollectionSizeRepository]
+    val mockHistoryRepository           = mock[MongoCollectionSizeHistoryRepository]
+    val mockQueryLogHistoryRepository   = mock[MongoQueryLogHistoryRepository]
+    val mockQueryNotificationRepository = mock[MongoQueryNotificationRepository]
+    val mockAppConfig                   = mock[AppConfig]
 
     val service = new MongoService(
       mockCarbonApiConnector,
@@ -60,6 +61,7 @@ class MongoServiceSpec
       mockLatestRepository,
       mockHistoryRepository,
       mockQueryLogHistoryRepository,
+      mockQueryNotificationRepository,
       mockAppConfig
     )
   }
@@ -68,7 +70,7 @@ class MongoServiceSpec
     "leave the db unchanged if gathering metrics fails" in new Setup {
       when(mockClickHouseConnector.getDatabaseNames(any[Environment])(any[HeaderCarrier])).thenReturn(Future.failed(new RuntimeException("test exception")))
 
-      implicit val hc: HeaderCarrier = new HeaderCarrier()
+      implicit val hc: HeaderCarrier = HeaderCarrier()
       service.updateCollectionSizes(Environment.QA).failed.futureValue shouldBe a[RuntimeException]
 
       verify(mockClickHouseConnector, times(1)).getDatabaseNames(Environment.QA)(hc)
@@ -82,7 +84,7 @@ class MongoServiceSpec
         val databases = Seq("service-one")
         val knownServices = Seq("service-one").map(ServiceName.apply)
 
-        implicit val hc: HeaderCarrier = new HeaderCarrier()
+        implicit val hc: HeaderCarrier = HeaderCarrier()
 
         when(mockClickHouseConnector.getDatabaseNames(any[Environment])(any[HeaderCarrier]))
           .thenReturn(Future.successful(databases))
@@ -162,7 +164,7 @@ class MongoServiceSpec
       val knownServices = Seq("service-one", "service-two", "service-one-frontend", "service-three").map(ServiceName.apply)
       val dbOverrides = Seq(DbOverride("service-three", Seq("random-db")))
 
-      implicit val hc: HeaderCarrier = new HeaderCarrier()
+      implicit val hc: HeaderCarrier = HeaderCarrier()
 
       when(mockClickHouseConnector.getDatabaseNames(any[Environment])(any[HeaderCarrier]))
       .thenReturn(Future.successful(databases))

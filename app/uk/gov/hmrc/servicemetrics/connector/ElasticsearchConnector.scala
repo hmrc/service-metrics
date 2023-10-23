@@ -35,14 +35,16 @@ class ElasticsearchConnector @Inject()(
 , elasticsearchConfig: ElasticsearchConfig
 )(implicit
   ec: ExecutionContext
-) {
+) extends play.api.Logging {
 
   import ElasticsearchConnector._
 
   private val base64Encoder               = Base64.getEncoder()
+  private val base64Decoder               = Base64.getDecoder()
   private val basicAuthenticationCredentials = elasticsearchConfig.environmentPasswords
                                               .map{ case (env, password) =>
-                                                env -> s"Basic ${base64Encoder.encode(s"${elasticsearchConfig.username}:$password".getBytes())}"
+                                                val decodedPassword = new String(base64Decoder.decode(password)).trim()
+                                                env -> s"Basic ${new String(base64Encoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
                                               }
 
   def getSlowQueries(environment: Environment, database: String)(implicit hc: HeaderCarrier): Future[Seq[MongoQueryLog]] =
@@ -59,57 +61,6 @@ class ElasticsearchConnector @Inject()(
     val to   = Instant.now
     val from = to.minusSeconds(elasticsearchConfig.nonPerformantQueriesIntervalInMinutes*60)
 
-    // This is the body that aggregates on the ES side
-    // val body = s"""
-    // {
-    //   "size": 10000,
-    //   "query": {
-    //     "bool": {
-    //       "must": [
-    //         {
-    //           "query_string": {
-    //             "query": "type:mongodb AND $query",
-    //             "analyze_wildcard": true,
-    //             "time_zone": "Europe/London"
-    //           }
-    //         }
-    //       ],
-    //       "filter": [
-    //         {
-    //           "range": {
-    //             "@timestamp": {
-    //               "format": "strict_date_optional_time",
-    //               "gte": "$from",
-    //               "lte": "$to"
-    //             }
-    //           }
-    //         }
-    //       ]
-    //     }
-    //   },
-    //   "aggs":{
-    //       "collection": {
-    //         "terms": {
-    //             "field": "collection.keyword"
-    //         },
-    //         "aggregations": {
-    //           "operation": {
-    //             "terms": {
-    //               "field": "operation.keyword"
-    //             }
-    //           }
-    //         }
-    //       }
-    //     }
-    //   },
-    //   "sort": [
-    //     {
-    //       "@timestamp": {
-    //         "order": "desc"
-    //     }
-    //   ]
-    // }"""
-
     val body = s"""
     {
       "size": 10000,
@@ -118,9 +69,7 @@ class ElasticsearchConnector @Inject()(
           "must": [
             {
               "query_string": {
-                "query": "type:mongodb AND $query",
-                "analyze_wildcard": true,
-                "time_zone": "Europe/London"
+                "query": "type:mongodb AND $query"
               }
             }
           ],
@@ -141,17 +90,22 @@ class ElasticsearchConnector @Inject()(
         {
           "@timestamp": {
             "order": "desc"
+          }
         }
       ]
     }"""
 
     httpClientV2
       .post(url"$baseUrl/${elasticsearchConfig.mongoDbIndex}/_search/")(hc.withExtraHeaders(
-        "Authentication" -> basicAuthenticationCredentials(environment),
-        "Content-Type" -> "application/json",
+        "Authorization" -> basicAuthenticationCredentials(environment),
+        "Content-Type"   -> "application/json",
       ))
       .withBody(body)
       .execute[JsValue]
+      .map{json =>
+        logger.error(s"\n\n\nES response $json\n\n\n")
+        json
+      }
       .map(_.as[Seq[MongoQueryLog]])
   }
 
@@ -169,12 +123,12 @@ object ElasticsearchConnector {
   object MongoQueryLog{
 
     private implicit val readsLog: Reads[MongoQueryLog] =
-      ( (__ \ "_source" \ "@timestamp" \ 0).read[Instant]
-      ~ (__ \ "_source" \ "collection" \ 0).read[String]
-      ~ (__ \ "_source" \ "database"   \ 0).read[String]
-      ~ (__ \ "_source" \ "mongo_db"   \ 0).read[String]
-      ~ (__ \ "_source" \ "operation"  \ 0).read[String]
-      ~ (__ \ "_source" \ "duration"   \ 0).read[Int]
+      ( (__ \ "_source" \ "@timestamp").read[Instant]
+      ~ (__ \ "_source" \ "collection").read[String]
+      ~ (__ \ "_source" \ "database"  ).read[String]
+      ~ (__ \ "_source" \ "mongo_db"  ).read[String]
+      ~ (__ \ "_source" \ "operation" ).read[String]
+      ~ (__ \ "_source" \ "duration"  ).read[Int]
       )(MongoQueryLog.apply _)
 
     val reads: Reads[Seq[MongoQueryLog]] =

@@ -23,7 +23,7 @@ import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.config.SlackNotifiactionsConfig
+import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -31,7 +31,7 @@ import scala.concurrent.{ExecutionContext, Future}
 class SlackNotificationsConnector @Inject()(
     httpClientV2  : HttpClientV2,
     servicesConfig: ServicesConfig,
-    slackNotifiactionsConfig   : SlackNotifiactionsConfig
+    slackNotifiactionsConfig   : SlackNotificationsConfig
   )(implicit val ec: ExecutionContext) {
 
   private val url: String = servicesConfig.baseUrl("slack-notifications")

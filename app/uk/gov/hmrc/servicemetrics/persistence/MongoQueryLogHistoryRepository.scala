@@ -117,7 +117,7 @@ object MongoQueryLogHistoryRepository {
   )
 
   object MongoQueryLogHistory{
-    implicit val instantFormat: Format[Instant] = MongoJavatimeFormats.instantFormat
+    private implicit val instantFormat: Format[Instant] = MongoJavatimeFormats.instantFormat
     val format: Format[MongoQueryLogHistory] =
       ( (__ \ "timestamp"  ).format[Instant]
       ~ (__ \ "collection" ).format[String]
@@ -160,9 +160,9 @@ object MongoQueryLogHistoryRepository {
   object NonPerformantQueries{
     private implicit val mqtFormat = MongoQueryType.format
     val format: Format[NonPerformantQueries] =
-      ( (__ \ "service"                ).format[String]
-      ~ (__ \ "environment"            ).format[Environment](Environment.format)
-      ~ (__ \ "hasNonPerformantQueries").format[Seq[MongoQueryType]]
+      ( (__ \ "service"    ).format[String]
+      ~ (__ \ "environment").format[Environment](Environment.format)
+      ~ (__ \ "queryTypes" ).format[Seq[MongoQueryType]]
       )(NonPerformantQueries.apply _, unlift(NonPerformantQueries.unapply _))
   }
 }

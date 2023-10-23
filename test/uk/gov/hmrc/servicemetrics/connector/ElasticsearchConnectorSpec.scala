@@ -17,10 +17,12 @@
 package uk.gov.hmrc.servicemetrics.connector
 
 import com.github.tomakehurst.wiremock.client.WireMock._
+import com.typesafe.config.ConfigFactory
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import play.api.Configuration
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
@@ -42,16 +44,34 @@ class ElasticsearchConnectorSpec
   import ElasticsearchConnector._
 
   private implicit val hc: HeaderCarrier = HeaderCarrier()
+  private val servicesConfig   = new ServicesConfig(
+    Configuration(ConfigFactory.parseString(s"""
+    |microservice {
+    |  services {
+    |    elasticsearch {
+    |      host                                       = "$wireMockHost"
+    |      port                                       = $wireMockPort
+    |      mongodb-index                              = "mongodb-logs"
+    |      username                                   = "changeme"
+    |      development.password                       = "Y2hhbmdlbWU="
+    |      integration.password                       = "Y2hhbmdlbWU="
+    |      qa.password                                = "Y2hhbmdlbWU="
+    |      staging.password                           = "Y2hhbmdlbWU="
+    |      externaltest.password                      = "Y2hhbmdlbWU="
+    |      production.password                        = "Y2hhbmdlbWU="
+    |      long-running-query-in-milliseconds         = 3000
+    |      non-performant-queries-interval-in-minutes = 1440
+    |    }
+    |  }
+    |}
+    """.stripMargin))
+  )
 
-  private val mockConfig       = mock[ServicesConfig]
   private val mongoDbLogsIndex = "mongodb-logs"
   private val mongoDbDatabase  = "preferences"
   private val now              = Instant.now()
 
-  when(mockConfig.baseUrl(any[String])).thenReturn(wireMockUrl)
-  when(mockConfig.getString(any[String])).thenReturn(mongoDbLogsIndex)
-
-  val connector = new ElasticsearchConnector(httpClientV2, new ElasticsearchConfig(mockConfig))
+  val connector = new ElasticsearchConnector(httpClientV2, new ElasticsearchConfig(servicesConfig))
 
   "getMongoDbLogs" should {
     "return mongo logs" in {
@@ -77,92 +97,68 @@ class ElasticsearchConnectorSpec
           |        "_id": "m8dVKYsB0UOcM7NdbuJI",
           |        "_score": 3.321853,
           |        "_source": {
-          |          "scan": [
-          |            "COLLSCAN"
-          |          ],
-          |          "mdtp_component_raw": [
-          |            "protected_mongo_a"
-          |          ],
-          |          "type": [
-          |            "mongodb"
-          |          ],
-          |          "duration": [
-          |            21957
-          |          ],
-          |          "path": [
-          |            "/var/log/mongodb/mongodb.log"
-          |          ],
-          |          "database": [
-          |            "preferences"
-          |          ],
-          |          "component_raw": [
-          |            "COMMAND"
-          |          ],
-          |          "@version": [
-          |            1
-          |          ],
-          |          "context": [
-          |            "conn42191"
-          |          ],
-          |          "host": [
-          |            "ip-172-24-25-202"
-          |          ],
-          |          "path_raw": [
-          |            "/var/log/mongodb/mongodb.log"
-          |          ],
-          |          "severity": [
-          |            "I"
-          |          ],
+          |          "scan": "COLLSCAN",
+          |          "mdtp_component_raw": "protected_mongo_a",
+          |          "type": "mongodb",
+          |          "duration": 21957,
+          |          "path": "/var/log/mongodb/mongodb.log",
+          |          "database": "preferences",
+          |          "component_raw": "COMMAND",
+          |          "@version": 1,
+          |          "context": "conn42191",
+          |          "host": "ip-172-24-25-202",
+          |          "path_raw": "/var/log/mongodb/mongodb.log",
+          |          "severity": "I",
           |          "tags_raw": [
           |            "eu-west-2a",
           |            "kafka"
           |          ],
-          |          "mongo_db": [
+          |          "mongo_db": 
           |            "protected_mongo"
-          |          ],
-          |          "database_raw": [
+          |          ,
+          |          "database_raw": 
           |            "preferences"
-          |          ],
-          |          "context_raw": [
+          |          ,
+          |          "context_raw": 
           |            "conn42191"
-          |          ],
-          |          "host_raw": [
+          |          ,
+          |          "host_raw": 
           |            "ip-172-24-25-202"
-          |          ],
-          |          "mdtp_component": [
+          |          ,
+          |          "mdtp_component": 
           |            "protected_mongo_a"
-          |          ],
-          |          "collection": [
+          |          ,
+          |          "collection": 
           |            "collection1"
-          |          ],
-          |          "type_raw": [
+          |          ,
+          |          "type_raw": 
           |            "mongodb"
-          |          ],
-          |          "scan_raw": [
+          |          ,
+          |          "scan_raw": 
           |            "COLLSCAN"
-          |          ],
+          |          ,
           |          "tags": [
           |            "eu-west-2a",
           |            "kafka"
           |          ],
-          |          "collection_raw": [
+          |          "collection_raw": 
           |            "collection1"
-          |          ],
-          |          "severity_raw": [
+          |          ,
+          |          "severity_raw": 
           |            "I"
-          |          ],
-          |          "component": [
+          |          ,
+          |          "component": 
           |            "COMMAND"
-          |          ],
-          |          "@timestamp": [
+          |          ,
+          |          "@timestamp": 
           |            "$now"
-          |          ],
-          |          "mongo_db_raw": [
+          |          ,
+          |          "mongo_db_raw": 
           |            "protected_mongo"
-          |          ],
-          |          "operation": [
+          |          ,
+          |          "operation": 
           |            "{}"
-          |          ]
+          |          
           |        }
           |      },{
           |        "_index": "$mongoDbLogsIndex",
@@ -170,92 +166,89 @@ class ElasticsearchConnectorSpec
           |        "_id": "m8dVKYsB0UOcM7NdbuJI",
           |        "_score": 3.321853,
           |        "_source": {
-          |          "scan": [
+          |          "scan": 
           |            "COLLSCAN"
-          |          ],
-          |          "mdtp_component_raw": [
+          |          ,
+          |          "mdtp_component_raw": 
           |            "protected_mongo_a"
-          |          ],
-          |          "type": [
+          |          ,
+          |          "type": 
           |            "mongodb"
-          |          ],
-          |          "duration": [
-          |            124546
-          |          ],
-          |          "path": [
+          |          ,
+          |          "duration": 124546,
+          |          "path": 
           |            "/var/log/mongodb/mongodb.log"
-          |          ],
-          |          "database": [
+          |          ,
+          |          "database": 
           |            "preferences"
-          |          ],
-          |          "component_raw": [
+          |          ,
+          |          "component_raw": 
           |            "COMMAND"
-          |          ],
-          |          "@version": [
+          |          ,
+          |          "@version": 
           |            1
-          |          ],
-          |          "context": [
+          |          ,
+          |          "context": 
           |            "conn42191"
-          |          ],
-          |          "host": [
+          |          ,
+          |          "host": 
           |            "ip-172-24-25-202"
-          |          ],
-          |          "path_raw": [
+          |          ,
+          |          "path_raw": 
           |            "/var/log/mongodb/mongodb.log"
-          |          ],
-          |          "severity": [
+          |          ,
+          |          "severity": 
           |            "I"
-          |          ],
+          |          ,
           |          "tags_raw": [
           |            "eu-west-2a",
           |            "kafka"
           |          ],
-          |          "mongo_db": [
+          |          "mongo_db": 
           |            "protected_mongo"
-          |          ],
-          |          "database_raw": [
+          |          ,
+          |          "database_raw": 
           |            "preferences"
-          |          ],
-          |          "context_raw": [
+          |          ,
+          |          "context_raw": 
           |            "conn42191"
-          |          ],
-          |          "host_raw": [
+          |          ,
+          |          "host_raw": 
           |            "ip-172-24-25-202"
-          |          ],
-          |          "mdtp_component": [
+          |          ,
+          |          "mdtp_component": 
           |            "protected_mongo_a"
-          |          ],
-          |          "collection": [
+          |          ,
+          |          "collection": 
           |            "collection2"
-          |          ],
-          |          "type_raw": [
+          |          ,
+          |          "type_raw": 
           |            "mongodb"
-          |          ],
-          |          "scan_raw": [
+          |          ,
+          |          "scan_raw": 
           |            "COLLSCAN"
-          |          ],
+          |          ,
           |          "tags": [
           |            "eu-west-2a",
           |            "kafka"
           |          ],
-          |          "collection_raw": [
+          |          "collection_raw": 
           |            "collection2"
-          |          ],
-          |          "severity_raw": [
+          |          ,
+          |          "severity_raw": 
           |            "I"
-          |          ],
-          |          "component": [
+          |          ,
+          |          "component": 
           |            "COMMAND"
-          |          ],
-          |          "@timestamp": [
+          |          ,
+          |          "@timestamp": 
           |            "$now"
-          |          ],
-          |          "mongo_db_raw": [
+          |          ,
+          |          "mongo_db_raw": 
           |            "protected_mongo"
-          |          ],
-          |          "operation": [
+          |          ,
+          |          "operation": 
           |            "{}"
-          |          ]
           |        }
           |      }
           |    ]

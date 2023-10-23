@@ -21,7 +21,8 @@ import cats.implicits._
 import play.api.Logger
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.mongo.lock.{LockService, MongoLockRepository}
-import uk.gov.hmrc.servicemetrics.config.{SchedulerConfigs, SlackNotifiactionsConfig}
+import uk.gov.hmrc.servicemetrics.config.{SchedulerConfigs}
+import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository.MongoQueryType
@@ -38,9 +39,9 @@ import scala.concurrent.duration.DurationInt
 class MongoNotificationsScheduler  @Inject()(
   schedulerConfig            : SchedulerConfigs
 , lockRepository             : MongoLockRepository
-, mongoMetricsService        : MongoService
+, mongoService               : MongoService
 , slackNotificationsConnector: SlackNotificationsConnector
-, slackNotifiactionsConfig   : SlackNotifiactionsConfig
+, slackNotifiactionsConfig   : SlackNotificationsConfig
 )(implicit
   actorSystem          : ActorSystem
 , applicationLifecycle : ApplicationLifecycle
@@ -57,7 +58,7 @@ class MongoNotificationsScheduler  @Inject()(
     val envs: List[Environment] =
       Environment.values.filterNot(_.equals(Environment.Integration))
     val to   = Instant.now
-    val from = to.minus(1, ChronoUnit.DAYS)
+    val from = to.minus(slackNotifiactionsConfig.notificationPeriod.toDays, ChronoUnit.DAYS)
 
     logger.info(s"Starting to notify teams of non performant mongo queries on ${envs.mkString(", ")}")
     for {
@@ -65,13 +66,13 @@ class MongoNotificationsScheduler  @Inject()(
     } yield logger.info(s"Finished notifying of non performant mongo queries on ${envs.mkString(", ")}")
   }
 
-  private def notifyPerEnvironment(
+  private[scheduler] def notifyPerEnvironment(
     env : Environment,
     from: Instant,
     to  : Instant,
   ) =
     for {
-      nonPerformantQueries <- mongoMetricsService.getAll(env, from, to)
+      nonPerformantQueries <- mongoService.getAllQueries(env, from, to)
       notificationData     =  nonPerformantQueries
                                 .map(npq => (npq.database, npq.collection, npq.service, npq.queryType))
                                 .distinct
@@ -82,17 +83,26 @@ class MongoNotificationsScheduler  @Inject()(
                                                   |Please, proceed to Kibana for more details:
                                                   |<${kibanaLink(queryType, service, env)}|${queryType.value}}>
                                                 """.stripMargin
-                                  if (slackNotifiactionsConfig.enabled)
-                                    slackNotificationsConnector.sendMessage(
-                                      SlackNotificationRequest(
-                                        OwningTeams(database), //TODO: make sure we don't need to translate database to repository name
-                                        MessageDetails(message)
-                                      )
-                                    ).map(_ +: acc)
-                                  else {
-                                    logger.info(message)
-                                    Future.successful(Seq.empty)
-                                  }
+                                  mongoService.hasBeenNotified(
+                                    collection, env, service, queryType
+                                  ).flatMap(hasBeenNotified =>
+                                    if (hasBeenNotified){
+                                      logger.info(s"Notification for service '$service', collection '$database.$collection' and query type '${queryType.value}' was triggered already.")
+                                      Future.successful(Seq.empty[SlackNotificationResponse])
+                                    } else {
+                                      if (slackNotifiactionsConfig.enabled)
+                                        slackNotificationsConnector.sendMessage(
+                                          SlackNotificationRequest(
+                                            OwningTeams(database), //TODO: make sure we don't need to translate database to repository name
+                                            MessageDetails(message)
+                                          )
+                                        ).map(_ +: acc)
+                                      else {
+                                        logger.info(message)
+                                        Future.successful(Seq.empty)
+                                      }
+                                    }
+                                  )
                                 }
     } yield ()
 
