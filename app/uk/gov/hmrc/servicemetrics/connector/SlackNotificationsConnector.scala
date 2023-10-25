@@ -16,7 +16,6 @@
 
 package uk.gov.hmrc.servicemetrics.connector
 
-import com.google.common.io.BaseEncoding
 import javax.inject.{Inject, Singleton}
 import play.api.libs.json._
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
@@ -29,23 +28,22 @@ import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class SlackNotificationsConnector @Inject()(
-    httpClientV2  : HttpClientV2,
-    servicesConfig: ServicesConfig,
+    httpClientV2               : HttpClientV2,
+    servicesConfig             : ServicesConfig,
     slackNotifiactionsConfig   : SlackNotificationsConfig
   )(implicit val ec: ExecutionContext) {
 
   private val url: String = servicesConfig.baseUrl("slack-notifications")
-  private val authorizationHeaderValue =
-    s"Basic ${BaseEncoding.base64().encode(s"${slackNotifiactionsConfig.username}:${slackNotifiactionsConfig.password}".getBytes("UTF-8"))}"
 
   def sendMessage(message: SlackNotificationRequest): Future[SlackNotificationResponse] = {
     implicit val hc         : HeaderCarrier = HeaderCarrier()
     implicit val snreqWrites: OWrites[SlackNotificationRequest] = SlackNotificationsFormats.snreqWrites
     implicit val snresReads : Reads[SlackNotificationResponse]  = SlackNotificationsFormats.snresReads
     httpClientV2
-      .post(url"$url/slack-notifications/notification")
+      .post(url"$url/slack-notifications/v2/notification")
       .withBody(Json.toJson(message))
-      .setHeader("Authorization" -> authorizationHeaderValue)
+      .setHeader("Authorization" -> slackNotifiactionsConfig.authToken)
+      .setHeader("Content-type"  -> "application/json")
       .execute[SlackNotificationResponse]
   }
 }
@@ -54,11 +52,8 @@ object SlackNotificationsFormats {
 
   val snreqWrites: OWrites[SlackNotificationRequest] = {
     implicit val clWrites: Writes[ChannelLookup] = Writes {
-      case s: OwningTeams             => Json.toJson(s)(Json.writes[OwningTeams])
-    }
-
-    implicit val mdfWrites: OWrites[MessageDetails] = {
-      Json.writes[MessageDetails]
+      case s: OwningTeams   => Json.toJson(s)(Json.writes[OwningTeams])
+      case s: SlackChannels => Json.toJson(s)(Json.writes[SlackChannels])
     }
 
     Json.writes[SlackNotificationRequest]
@@ -86,11 +81,29 @@ final case class OwningTeams(
   by            : String = "github-repository"
 ) extends ChannelLookup
 
-final case class MessageDetails(
-  text: String,
-)
+final case class SlackChannels(
+  slackChannels: Seq[String],
+  by           : String = "slack-channel"
+) extends ChannelLookup
 
 final case class SlackNotificationRequest(
-  channelLookup : ChannelLookup,
-  messageDetails: MessageDetails
+  channelLookup: ChannelLookup,
+  displayName  : String,
+  emoji        : String,
+  text         : String,
+  blocks       : Seq[JsObject]
 )
+
+object SlackNotificationRequest {
+  def toBlocks(message: String, referenceUrl: Option[(java.net.URL, String)]): Seq[JsObject] =
+    Json.obj(
+      "type" -> JsString("section")
+    , "text" -> Json.obj("type" -> JsString("mrkdwn"), "text" -> JsString(message))
+    ) :: (referenceUrl match {
+      case Some((url, title)) =>
+        Json.obj("type" -> JsString("divider"))                                      ::
+        Json.obj("type" -> JsString("mrkdwn"), "text" -> JsString(s"<$url|$title>")) ::
+        Nil
+      case None               => Nil
+    })
+}

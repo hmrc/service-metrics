@@ -30,7 +30,7 @@ import uk.gov.hmrc.servicemetrics.config.{SchedulerConfig, SchedulerConfigs}
 import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 import uk.gov.hmrc.servicemetrics.connector._
-import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository
+import uk.gov.hmrc.servicemetrics.persistence.{MongoQueryLogHistoryRepository, MongoQueryNotificationRepository}
 import uk.gov.hmrc.servicemetrics.service.MongoService
 
 import java.time.Instant
@@ -73,6 +73,7 @@ class MongoNotificationsSchedulerSpec
 
         verify(mockMongoService, times(1)).getAllQueries(any[Environment], any[Instant], any[Instant])
         verify(mockMongoService, times(1)).hasBeenNotified(any[String], any[Environment], any[String], any[MongoQueryLogHistoryRepository.MongoQueryType])
+        verify(mockMongoService, times(1)).flagAsNotified(any[Seq[MongoQueryNotificationRepository.MongoQueryNotification]])
         verify(mockSlackNotificationsConnector, times(1)).sendMessage(any[SlackNotificationRequest])
       }
     }
@@ -179,19 +180,17 @@ class MongoNotificationsSchedulerSpec
       |}
       |alerts {
       |  slack {
-      |    basicAuth {
-      |      username = test
-      |      password = test
-      |    }
+      |    auth-token = token
       |    enabled = $areNotificationEnabled
       |    notification-period = 1.days
       |    throttling-period   = 7.days
+      |    notify-teams = false
       |
       |    kibana {
       |      baseUrl = "http://logs.$${env}.local"
       |      links  = {
-      |        "Slow Running Query"           = "url"
-      |        "Non Indexed Collection Query" = "url"
+      |        "Slow Running Query"           = "http://url"
+      |        "Non Indexed Collection Query" = "http://url"
       |      }
       |    }
       |  }
@@ -215,6 +214,9 @@ class MongoNotificationsSchedulerSpec
 
     when(mockMongoService.hasBeenNotified(any[String], any[Environment], any[String], any[MongoQueryLogHistoryRepository.MongoQueryType]))
       .thenReturn(Future.successful(hasBeenNotified))
+
+    when(mockMongoService.flagAsNotified(any[Seq[MongoQueryNotificationRepository.MongoQueryNotification]]))
+      .thenReturn(Future.unit)
     
     when(mockSlackNotificationsConnector.sendMessage(any[SlackNotificationRequest]))
       .thenReturn(Future.successful(SlackNotificationResponse(List.empty)))

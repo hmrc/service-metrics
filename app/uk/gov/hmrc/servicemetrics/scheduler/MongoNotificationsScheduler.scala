@@ -26,6 +26,7 @@ import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository.MongoQueryType
+import uk.gov.hmrc.servicemetrics.persistence.MongoQueryNotificationRepository.MongoQueryNotification
 import uk.gov.hmrc.servicemetrics.service.MongoService
 
 import java.net.URLEncoder
@@ -62,7 +63,14 @@ class MongoNotificationsScheduler  @Inject()(
 
     logger.info(s"Starting to notify teams of non performant mongo queries on ${envs.mkString(", ")}")
     for {
-      _ <- Future.traverse(envs)(notifyPerEnvironment(_, from, to))
+      _ <- Future.traverse(envs)(env =>
+        notifyPerEnvironment(env, from, to)
+          .recoverWith {
+            case scala.util.control.NonFatal(e) =>
+              logger.error(s"Failed to notify teams of non performant mongo queries on ${env.asString}", e)
+              Future.unit
+          }
+      )
     } yield logger.info(s"Finished notifying of non performant mongo queries on ${envs.mkString(", ")}")
   }
 
@@ -72,38 +80,68 @@ class MongoNotificationsScheduler  @Inject()(
     to  : Instant,
   ) =
     for {
-      nonPerformantQueries <- mongoService.getAllQueries(env, from, to)
-      notificationData     =  nonPerformantQueries
+      nonPerformantQueries    <- mongoService.getAllQueries(env, from, to)
+      notificationData        =  nonPerformantQueries
                                 .map(npq => (npq.database, npq.collection, npq.service, npq.queryType))
                                 .distinct
-      _                    <- notificationData.foldLeftM[Future, Seq[SlackNotificationResponse]](Seq.empty){
-                                case (acc, (database, collection, service, queryType)) =>
-                                  val message = s"""
-                                                  |The service *$service* is running non performant queries against the collection *$database.$collection* in *${env.asString}*
-                                                  |Please, proceed to Kibana for more details:
-                                                  |<${kibanaLink(queryType, service, env)}|${queryType.value}}>
-                                                """.stripMargin
-                                  mongoService.hasBeenNotified(
-                                    collection, env, service, queryType
-                                  ).flatMap(hasBeenNotified =>
-                                    if (hasBeenNotified){
-                                      logger.info(s"Notification for service '$service', collection '$database.$collection' and query type '${queryType.value}' was triggered already.")
-                                      Future.successful(Seq.empty[SlackNotificationResponse])
-                                    } else {
-                                      if (slackNotifiactionsConfig.enabled)
-                                        slackNotificationsConnector.sendMessage(
-                                          SlackNotificationRequest(
-                                            OwningTeams(database), //TODO: make sure we don't need to translate database to repository name
-                                            MessageDetails(message)
-                                          )
-                                        ).map(_ +: acc)
-                                      else {
-                                        logger.info(message)
+      mongoQueryNotifications <- notificationData.foldLeftM[Future, Seq[MongoQueryNotification]](Seq.empty){
+                                  case (acc, (database, collection, service, queryType)) =>
+                                    val message = s"""
+                                                    |The service *$service* is running non performant queries against the collection *$database.$collection* in *${env.asString}*
+                                                    |Please click on the following Kibana links for more details:
+                                                  """.stripMargin
+                                    mongoService.hasBeenNotified(
+                                      collection, env, service, queryType
+                                    ).flatMap(hasBeenNotified =>
+                                      if (hasBeenNotified){
+                                        logger.info(s"Notification for service '$service', collection '$database.$collection' and query type '${queryType.value}' was triggered already.")
                                         Future.successful(Seq.empty)
+                                      } else {
+                                        if (slackNotifiactionsConfig.enabled) {
+                                          val channelLookup = if (slackNotifiactionsConfig.notifyTeams)
+                                            OwningTeams(database)
+                                            else
+                                              SlackChannels(Seq("team-platops-alerts"))
+
+                                          slackNotificationsConnector.sendMessage(
+                                            SlackNotificationRequest(
+                                              channelLookup = channelLookup,
+                                              text          = message,
+                                              emoji         = ":see_no_evil:",
+                                              displayName   = queryType.value,
+                                              blocks        = SlackNotificationRequest.toBlocks(
+                                                message,
+                                                Some(
+                                                  new java.net.URL(kibanaLink(queryType, service, env)) -> queryType.value
+                                                )
+                                              )
+                                            )
+                                          )
+                                          .collect{
+                                            case response if response.errors.isEmpty => 
+                                              logger.info(s"Creating notification to save")
+                                              MongoQueryNotification(
+                                                collection  = collection,
+                                                service     = service,
+                                                environment = env,
+                                                queryType   = queryType,
+                                                timestamp   = Instant.now(),
+                                              ) +: acc
+                                            case response => 
+                                              logger.error(s"Errors occurred when sending a slack notification ${response.errors}")
+                                              acc
+                                          }
+                                        } else {
+                                          logger.info(message)
+                                          Future.successful(Seq.empty)
+                                        }
                                       }
-                                    }
-                                  )
-                                }
+                                    )
+                                  }
+      _                       <- if (mongoQueryNotifications.nonEmpty)
+                                  mongoService.flagAsNotified(mongoQueryNotifications)
+                                else
+                                  Future.unit
     } yield ()
 
   private def kibanaLink(

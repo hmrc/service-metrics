@@ -22,12 +22,12 @@ import scala.concurrent.duration.Duration
 
 @Singleton
 class SlackNotificationsConfig @Inject()(configuration: Configuration) {
-  private val slackKey   = "alerts.slack.basicAuth"
-  val username          : String   = configuration.get[String](s"$slackKey.username")
-  val password          : String   = configuration.get[String](s"$slackKey.password")
-  val enabled           : Boolean  = configuration.get[Boolean](s"alerts.slack.enabled")
-  val notificationPeriod: Duration = configuration.get[Duration](s"alerts.slack.notification-period")
-  val throttlingPeriod  : Duration = configuration.get[Duration](s"alerts.slack.throttling-period")
+  private val slackKey  = "alerts.slack"
+  val authToken         : String   = configuration.get[String](s"$slackKey.auth-token")
+  val enabled           : Boolean  = configuration.get[Boolean](s"$slackKey.enabled")
+  val notifyTeams       : Boolean  = configuration.get[Boolean](s"$slackKey.notify-teams")
+  val notificationPeriod: Duration = configuration.get[Duration](s"$slackKey.notification-period")
+  val throttlingPeriod  : Duration = configuration.get[Duration](s"$slackKey.throttling-period")
 
-  val kibanaLinks: Map[String, String] = configuration.get[Map[String, String]]("alerts.slack.kibana.links")
+  val kibanaLinks: Map[String, String] = configuration.get[Map[String, String]](s"$slackKey.kibana.links")
 }

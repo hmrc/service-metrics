@@ -84,11 +84,10 @@ class MongoQueryLogHistoryRepositorySpec
 
         repository.getQueryTypesByService(
             expectedResult.service,
-            expectedResult.environment,
             Instant.now().minusSeconds(10),
             Instant.now()
           )
-          .futureValue shouldBe expectedResult
+          .futureValue shouldBe List(expectedResult)
       }
     }
   }

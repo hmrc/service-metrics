@@ -44,7 +44,6 @@ cc: ControllerComponents
 
   def nonPerformantQueriesByService(
     service    : String,
-    environment: Option[Environment],
     from       : Instant,
     to         : Instant,
   ): Action[AnyContent] =
@@ -52,9 +51,8 @@ cc: ControllerComponents
       implicit val writes: Writes[NonPerformantQueries] = NonPerformantQueries.format
       mongoMetricService.nonPerformantQueriesByService(
           service,
-          environment.getOrElse(Environment.Production),
           from,
           to
-        ).map(logs => Ok(Json.toJson(logs)))
+        ).map(nonPerformantQueries => Ok(Json.toJson(nonPerformantQueries)))
     }
 }

@@ -1,7 +1,7 @@
 
 # service-metrics
 
-This is a placeholder README.md for a new repository
+Service that gathers and exposes metrics on MDTP services and tools.
 
 ### License
 

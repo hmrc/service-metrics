@@ -31,6 +31,8 @@ import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
 import MongoQueryLogHistoryRepository._
+import com.mongodb.client.model.Aggregates
+import com.mongodb.client.model.Accumulators
 
 @Singleton
 class MongoQueryLogHistoryRepository @Inject()(
@@ -52,14 +54,12 @@ class MongoQueryLogHistoryRepository @Inject()(
 
   def getQueryTypesByService(
     service    : String,
-    environment: Environment,
     from       : Instant,
     to         : Instant,
-  ): Future[NonPerformantQueries] = {
+  ): Future[Seq[NonPerformantQueries]] = {
 
     val filters = Seq(
       Filters.equal("service", service),
-      Filters.equal("environment", environment.asString),
       Filters.and(
         Filters.gte("timestamp", from),
         Filters.lte("timestamp", to)
@@ -67,14 +67,16 @@ class MongoQueryLogHistoryRepository @Inject()(
     )
 
     collection
-      .distinct[MongoQueryType]("queryType")
-      .filter(Filters.and(filters: _*))
+      .find(Filters.and(filters: _*))
       .toFuture()
-      .map(result => NonPerformantQueries(
-        service,
-        environment,
-        result
-      ))
+      .map(_.groupBy(_.environment))
+      .map(_.map{ case (environment, results) =>
+        NonPerformantQueries(
+          service,
+          environment,
+          results.map(_.queryType).distinct
+        )
+      }.toSeq)
   }
 
   def getAll(

@@ -43,7 +43,10 @@ class ElasticsearchConnector @Inject()(
   private val base64Decoder               = Base64.getDecoder()
   private val basicAuthenticationCredentials = elasticsearchConfig.environmentPasswords
                                               .map{ case (env, password) =>
-                                                val decodedPassword = new String(base64Decoder.decode(password)).trim()
+                                                val decodedPassword = scala.util.Try(new String(base64Decoder.decode(password)).trim()).getOrElse {
+                                                  logger.info(s"Couldn't decode password for env ${env.asString}")
+                                                  ""
+                                                }
                                                 env -> s"Basic ${new String(base64Encoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
                                               }
 
@@ -102,10 +105,6 @@ class ElasticsearchConnector @Inject()(
       ))
       .withBody(body)
       .execute[JsValue]
-      .map{json =>
-        logger.error(s"\n\n\nES response $json\n\n\n")
-        json
-      }
       .map(_.as[Seq[MongoQueryLog]])
   }
 

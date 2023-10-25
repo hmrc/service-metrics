@@ -66,15 +66,10 @@ class MongoService @Inject()(
 
   def nonPerformantQueriesByService(
     service    : String,
-    environment: Environment,
     from       : Instant,
     to         : Instant,
   ): Future[Seq[NonPerformantQueries]] =
-    MongoQueryType.values.foldLeftM[Future, Seq[NonPerformantQueries]](Seq.empty){ case (acc, queryType) =>
-      for {
-        result <- queryLogHistoryRepository.getQueryTypesByService(service, environment, from, to)
-      } yield acc :+ result
-    }
+    queryLogHistoryRepository.getQueryTypesByService(service, from, to)
 
   def getAllQueries(
     environment: Environment,
@@ -89,8 +84,11 @@ class MongoService @Inject()(
       queryLogs   <- mappings.foldLeftM[Future, Seq[MongoQueryLogHistory]](Seq.empty){
                        (acc, mapping) => getQueryLogs(mapping, environment).map(acc ++ _)
                      }
-      _           <- queryLogHistoryRepository.insertMany(queryLogs)
-    } yield logger.info(s"Successfully updated mongo collection sizes for ${environment.asString}")
+      _           <- if (queryLogs.nonEmpty)
+        queryLogHistoryRepository.insertMany(queryLogs)
+        else
+          Future.unit
+    } yield logger.info(s"Successfully added query logs for ${environment.asString}")
   }
 
   def hasBeenNotified(
@@ -105,6 +103,9 @@ class MongoService @Inject()(
       service,
       queryType
     )
+
+  def flagAsNotified(notifications: Seq[MongoQueryNotificationRepository.MongoQueryNotification]): Future[Unit] =
+    queryNotificationRepository.insertMany(notifications)
 
   private[service] def storeHistory(mcs: Seq[MongoCollectionSize], environment: Environment): Future[Unit] =
     for {

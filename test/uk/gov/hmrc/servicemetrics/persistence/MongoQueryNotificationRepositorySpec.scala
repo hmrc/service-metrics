@@ -46,13 +46,11 @@ class MongoQueryNotificationRepositorySpec
     |}
     |alerts {
     |  slack {
-    |    basicAuth {
-    |      username = test
-    |      password = test
-    |    }
+    |    auth-token = token
     |    enabled = true
     |    notification-period = 1.days
     |    throttling-period   = 7.days
+    |    notify-teams = false
     |
     |    kibana {
     |      baseUrl = "http://logs.$${env}.local"
