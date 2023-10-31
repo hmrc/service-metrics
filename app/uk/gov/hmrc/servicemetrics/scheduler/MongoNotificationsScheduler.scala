@@ -106,7 +106,7 @@ class MongoNotificationsScheduler  @Inject()(
                                           slackNotificationsConnector.sendMessage(
                                             SlackNotificationRequest(
                                               channelLookup = channelLookup,
-                                              text          = message,
+                                              text          = "There are non-performant queries running against MongoDB",
                                               emoji         = ":see_no_evil:",
                                               displayName   = queryType.value,
                                               blocks        = SlackNotificationRequest.toBlocks(
