@@ -23,7 +23,7 @@ import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.mongo.lock.{LockService, MongoLockRepository}
 import uk.gov.hmrc.servicemetrics.config.SchedulerConfigs
 import uk.gov.hmrc.servicemetrics.model.Environment
-import uk.gov.hmrc.servicemetrics.service.MongoCollectionSizeService
+import uk.gov.hmrc.servicemetrics.service.MongoService
 
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
@@ -31,10 +31,10 @@ import scala.concurrent.duration.DurationInt
 import scala.util.control.NonFatal
 
 @Singleton
-class MongoCollectionSizeScheduler @Inject()(
+class MongoMetricsScheduler @Inject()(
   schedulerConfig     : SchedulerConfigs
 , lockRepository      : MongoLockRepository
-, mongoMetricsService : MongoCollectionSizeService
+, mongoMetricsService : MongoService
 )(implicit
   actorSystem          : ActorSystem
 , applicationLifecycle : ApplicationLifecycle
@@ -44,25 +44,35 @@ class MongoCollectionSizeScheduler @Inject()(
   override val logger = Logger(getClass)
 
   scheduleWithLock(
-    label           = "MongoCollectionSizeScheduler",
-    schedulerConfig = schedulerConfig.mongoCollectionSizeScheduler,
-    lock            = LockService(lockRepository, "mongo-collection-size-scheduler", 30.minutes)
+    label           = "MongoMetricsScheduler",
+    schedulerConfig = schedulerConfig.mongoMetricsScheduler,
+    lock            = LockService(lockRepository, "mongo-metrics-scheduler", 30.minutes)
   ) {
     val envs: List[Environment] =
       Environment.values.filterNot(_.equals(Environment.Integration))
 
-    logger.info(s"Updating mongo collection sizes for ${envs.mkString(", ")}")
+    logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")
     implicit val hc: HeaderCarrier = HeaderCarrier()
     for {
-      _ <- Future.traverse(envs){ env =>
-        mongoMetricsService
-          .updateCollectionSizes(env)
-          .recoverWith {
-            case NonFatal(e) =>
-              logger.warn(s"Failed to update mongo collection sizes for ${env.asString}", e)
-              Future.unit
-          }
-      }
-    } yield logger.info(s"Finished updating mongo collection sizes for ${envs.mkString(", ")}")
+      _ <- Future.traverse(envs)(updatePerEnvironment(_))
+    } yield logger.info(s"Finished updating mongo metrics for ${envs.mkString(", ")}")
   }
+
+  private def updatePerEnvironment(env: Environment)(implicit hc: HeaderCarrier) =
+    for {
+      _ <- mongoMetricsService
+            .updateCollectionSizes(env)
+            .recoverWith {
+              case NonFatal(e) =>
+                logger.error(s"Failed to update mongo collection sizes for ${env.asString}", e)
+                Future.unit
+            }
+      _ <- mongoMetricsService
+            .insertQueryLogs(env)
+            .recoverWith {
+              case NonFatal(e) =>
+                logger.error(s"Failed to insert mongo query logs for ${env.asString}", e)
+                Future.unit
+            }
+    } yield ()
 }

@@ -46,5 +46,6 @@ object SchedulerConfig {
 
 @Singleton
 class SchedulerConfigs @Inject()(configuration: Configuration) {
-  val mongoCollectionSizeScheduler = SchedulerConfig(configuration, "mongo-collection-size-scheduler")
+  val mongoMetricsScheduler       = SchedulerConfig(configuration, "mongo-metrics-scheduler")
+  val mongoNotificationsScheduler = SchedulerConfig(configuration, "mongo-notifications-scheduler")
 }

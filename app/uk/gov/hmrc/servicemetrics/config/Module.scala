@@ -17,13 +17,14 @@
 package uk.gov.hmrc.servicemetrics.config
 
 import com.google.inject.AbstractModule
-import uk.gov.hmrc.servicemetrics.scheduler.MongoCollectionSizeScheduler
+import uk.gov.hmrc.servicemetrics.scheduler.{MongoMetricsScheduler, MongoNotificationsScheduler}
 
 class Module extends AbstractModule {
 
   override def configure(): Unit = {
 
     bind(classOf[AppConfig]).asEagerSingleton()
-    bind(classOf[MongoCollectionSizeScheduler]).asEagerSingleton()
+    bind(classOf[MongoMetricsScheduler]).asEagerSingleton()
+    bind(classOf[MongoNotificationsScheduler]).asEagerSingleton()
   }
 }

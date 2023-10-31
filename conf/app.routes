@@ -1,2 +1,3 @@
 # microservice specific routes
-GET        /:service/collections    uk.gov.hmrc.servicemetrics.controllers.MongoCollectionSizeController.getCollections(service: String, environment: Option[Environment] ?= None)
+GET        /:service/collections                 uk.gov.hmrc.servicemetrics.controllers.MongoMetricsController.getCollections(service: String, environment: Option[Environment] ?= None)
+GET        /:service/non-performant-queries      uk.gov.hmrc.servicemetrics.controllers.MongoMetricsController.nonPerformantQueriesByService(service: String, from: java.time.Instant ?= java.time.Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS), to: java.time.Instant ?= java.time.Instant.now())
