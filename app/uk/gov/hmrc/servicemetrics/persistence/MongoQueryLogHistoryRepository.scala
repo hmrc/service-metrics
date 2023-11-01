@@ -31,8 +31,6 @@ import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
 import MongoQueryLogHistoryRepository._
-import com.mongodb.client.model.Aggregates
-import com.mongodb.client.model.Accumulators
 
 @Singleton
 class MongoQueryLogHistoryRepository @Inject()(
@@ -111,7 +109,7 @@ object MongoQueryLogHistoryRepository {
     collection : String,
     database   : String,
     mongoDb    : String,
-    operation  : String,
+    operation  : Option[String],
     duration   : Int,
     service    : String,
     queryType  : MongoQueryType,
@@ -125,7 +123,7 @@ object MongoQueryLogHistoryRepository {
       ~ (__ \ "collection" ).format[String]
       ~ (__ \ "database"   ).format[String]
       ~ (__ \ "mongoDb"    ).format[String]
-      ~ (__ \ "operation"  ).format[String]
+      ~ (__ \ "operation"  ).formatNullable[String]
       ~ (__ \ "duration"   ).format[Int]
       ~ (__ \ "service"    ).format[String]
       ~ (__ \ "queryType"  ).format[MongoQueryType](MongoQueryType.format)

@@ -271,7 +271,7 @@ class ElasticsearchConnectorSpec
           database    = mongoDbDatabase,
           collection  = "collection1",
           mongoDb     = "protected_mongo",
-          operation   = "{}",
+          operation   = Some("{}"),
           duration    = 21957,
         ),
         MongoQueryLog(
@@ -279,7 +279,7 @@ class ElasticsearchConnectorSpec
           database    = mongoDbDatabase,
           collection  = "collection2",
           mongoDb     = "protected_mongo",
-          operation   = "{}",
+          operation   = Some("{}"),
           duration    = 124546,
         )
       )
