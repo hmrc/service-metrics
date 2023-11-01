@@ -105,6 +105,10 @@ class ElasticsearchConnector @Inject()(
       ))
       .withBody(body)
       .execute[JsValue]
+      .map{r =>
+        logger.info(s"${environment.asString} Received from ES $r")
+        r  
+      }
       .map(_.as[Seq[MongoQueryLog]])
   }
 
@@ -115,7 +119,7 @@ object ElasticsearchConnector {
     collection: String,
     database  : String,
     mongoDb   : String,
-    operation : String,
+    operation : Option[String],
     duration  : Int,
   )
 
@@ -126,7 +130,7 @@ object ElasticsearchConnector {
       ~ (__ \ "_source" \ "collection").read[String]
       ~ (__ \ "_source" \ "database"  ).read[String]
       ~ (__ \ "_source" \ "mongo_db"  ).read[String]
-      ~ (__ \ "_source" \ "operation" ).read[String]
+      ~ (__ \ "_source" \ "operation" ).readNullable[String]
       ~ (__ \ "_source" \ "duration"  ).read[Int]
       )(MongoQueryLog.apply _)
 

@@ -102,7 +102,7 @@ class MongoServiceSpec
               "collection",
               "database",
               "mongoDb",
-              "{}",
+              Some("{}"),
               3001,
             )
           )))
