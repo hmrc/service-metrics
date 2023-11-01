@@ -40,7 +40,7 @@ class MongoQueryLogHistoryRepositorySpec
         collection  = "collection",
         database    = "database",
         mongoDb     = "mongoDb",
-        operation   = "{}",
+        operation   = Some("{}"),
         duration    = 3001,
         service     = "service",
         queryType   = queryType,

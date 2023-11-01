@@ -271,7 +271,7 @@ class ElasticsearchConnectorSpec
           database    = mongoDbDatabase,
           collection  = "collection1",
           mongoDb     = "protected_mongo",
-          operation   = "{}",
+          operation   = Some("{}"),
           duration    = 21957,
         ),
         MongoQueryLog(
@@ -279,7 +279,7 @@ class ElasticsearchConnectorSpec
           database    = mongoDbDatabase,
           collection  = "collection2",
           mongoDb     = "protected_mongo",
-          operation   = "{}",
+          operation   = Some("{}"),
           duration    = 124546,
         )
       )
@@ -287,6 +287,120 @@ class ElasticsearchConnectorSpec
       val mongoDbLogs = connector.getSlowQueries(Environment.QA, "preferences").futureValue
 
       mongoDbLogs should contain theSameElementsAs expected
+    }
+    "return mongo logs" when {
+      "there is no operation" in {
+
+        val rawResponse =
+          s"""
+            |{
+            |  "took": 7,
+            |  "timed_out": false,
+            |  "_shards": {
+            |    "total": 5,
+            |    "successful": 5,
+            |    "skipped": 0,
+            |    "failed": 0
+            |  },
+            |  "hits": {
+            |    "total": 1,
+            |    "max_score": 3.321853,
+            |    "hits": [
+            |      {
+            |        "_index": "$mongoDbLogsIndex",
+            |        "_type": "$mongoDbLogsIndex",
+            |        "_id": "m8dVKYsB0UOcM7NdbuJI",
+            |        "_score": 3.321853,
+            |        "_source": {
+            |          "scan": "COLLSCAN",
+            |          "mdtp_component_raw": "protected_mongo_a",
+            |          "type": "mongodb",
+            |          "duration": 21957,
+            |          "path": "/var/log/mongodb/mongodb.log",
+            |          "database": "preferences",
+            |          "component_raw": "COMMAND",
+            |          "@version": 1,
+            |          "context": "conn42191",
+            |          "host": "ip-172-24-25-202",
+            |          "path_raw": "/var/log/mongodb/mongodb.log",
+            |          "severity": "I",
+            |          "tags_raw": [
+            |            "eu-west-2a",
+            |            "kafka"
+            |          ],
+            |          "mongo_db": 
+            |            "protected_mongo"
+            |          ,
+            |          "database_raw": 
+            |            "preferences"
+            |          ,
+            |          "context_raw": 
+            |            "conn42191"
+            |          ,
+            |          "host_raw": 
+            |            "ip-172-24-25-202"
+            |          ,
+            |          "mdtp_component": 
+            |            "protected_mongo_a"
+            |          ,
+            |          "collection": 
+            |            "collection1"
+            |          ,
+            |          "type_raw": 
+            |            "mongodb"
+            |          ,
+            |          "scan_raw": 
+            |            "COLLSCAN"
+            |          ,
+            |          "tags": [
+            |            "eu-west-2a",
+            |            "kafka"
+            |          ],
+            |          "collection_raw": 
+            |            "collection1"
+            |          ,
+            |          "severity_raw": 
+            |            "I"
+            |          ,
+            |          "component": 
+            |            "COMMAND"
+            |          ,
+            |          "@timestamp": 
+            |            "$now"
+            |          ,
+            |          "mongo_db_raw": 
+            |            "protected_mongo"
+            |        }
+            |      }
+            |    ]
+            |  }
+            |}
+            |""".stripMargin
+
+        stubFor(
+          post(urlPathEqualTo(s"/$mongoDbLogsIndex/_search/"))
+            .willReturn(
+              aResponse()
+                .withStatus(200)
+                .withBody(rawResponse)
+            )
+        )
+
+        val expected = Seq(
+          MongoQueryLog(
+            timestamp   = now,
+            database    = mongoDbDatabase,
+            collection  = "collection1",
+            mongoDb     = "protected_mongo",
+            operation   = None,
+            duration    = 21957,
+          )
+        )
+
+        val mongoDbLogs = connector.getSlowQueries(Environment.QA, "preferences").futureValue
+
+        mongoDbLogs should contain theSameElementsAs expected
+      }
     }
   }
 }
