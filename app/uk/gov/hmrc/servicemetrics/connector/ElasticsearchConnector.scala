@@ -105,7 +105,16 @@ class ElasticsearchConnector @Inject()(
       ))
       .withBody(body)
       .execute[JsValue]
-      .map(_.as[Seq[MongoQueryLog]])
+      .map(json =>
+        json.validate[Seq[MongoQueryLog]]
+          .fold(error => {
+              logger.error(s"Error while parsing JSON $json\n\n$error")
+              Seq.empty
+            },
+            identity  
+          )
+
+      )
   }
 
 }
