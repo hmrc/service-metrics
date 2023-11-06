@@ -71,6 +71,7 @@ class MongoQueryNotificationRepositorySpec
       service     = "service",
       queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
       environment = env,
+      team        = "team"
     )
   )
 
@@ -79,19 +80,12 @@ class MongoQueryNotificationRepositorySpec
     "return true" when {
       "there are notifications for a service, collection, environment and query type" in {
         
-        val collection  = "collection"
-        val service     = "service"
+        val team        = "team"
         val environment = Environment.QA
-        val queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery
 
         repository.insertMany(seed(environment)).futureValue
 
-        repository.hasBeenNotified(
-            collection,
-            environment,
-            service,
-            queryType,
-          ).futureValue shouldBe true
+        repository.hasBeenNotified(team).futureValue shouldBe true
       }
     }
   }
