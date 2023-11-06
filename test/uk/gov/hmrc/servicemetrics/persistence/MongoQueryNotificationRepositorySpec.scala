@@ -71,6 +71,7 @@ class MongoQueryNotificationRepositorySpec
       service     = "service",
       queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
       environment = env,
+      team        = "team"
     )
   )
 
@@ -81,6 +82,7 @@ class MongoQueryNotificationRepositorySpec
         
         val collection  = "collection"
         val service     = "service"
+        val team        = "team"
         val environment = Environment.QA
         val queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery
 
@@ -91,6 +93,7 @@ class MongoQueryNotificationRepositorySpec
             environment,
             service,
             queryType,
+            team,
           ).futureValue shouldBe true
       }
     }
