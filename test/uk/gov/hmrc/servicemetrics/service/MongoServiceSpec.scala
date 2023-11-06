@@ -24,7 +24,7 @@ import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
-import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.{Service, ServiceName}
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository, MongoQueryNotificationRepository}
 import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
@@ -82,7 +82,7 @@ class MongoServiceSpec
     "insert mongodb logs" when {
       "there are slow queries in ES" in new Setup {
         val databases = Seq("service-one")
-        val knownServices = Seq("service-one").map(ServiceName.apply)
+        val knownServices = Seq(Service(ServiceName("service-one"), Seq("team-one")))
 
         implicit val hc: HeaderCarrier = HeaderCarrier()
 
@@ -161,7 +161,12 @@ class MongoServiceSpec
   "getMappings" should {
     "map a database to a service taking into account overrides and similarly named dbs" in new Setup {
       val databases = Seq("service-one", "service-one-frontend", "service-two", "random-db")
-      val knownServices = Seq("service-one", "service-two", "service-one-frontend", "service-three").map(ServiceName.apply)
+      val knownServices = Seq(
+        Service(ServiceName("service-one"), Seq("team-one")),
+        Service(ServiceName("service-two"), Seq("team-two")),
+        Service(ServiceName("service-one-frontend"), Seq("team-one")),
+        Service(ServiceName("service-three"), Seq("team-three"))
+      )
       val dbOverrides = Seq(DbOverride("service-three", Seq("random-db")))
 
       implicit val hc: HeaderCarrier = HeaderCarrier()
@@ -176,10 +181,10 @@ class MongoServiceSpec
       .thenReturn(Future.successful(dbOverrides))
 
       val expected = Seq(
-        DbMapping(ServiceName("service-one"), "service-one", Seq("service-one-frontend")),
-        DbMapping(ServiceName("service-one-frontend"), "service-one-frontend", Seq.empty),
-        DbMapping(ServiceName("service-two"), "service-two", Seq.empty),
-        DbMapping(ServiceName("service-three"), "random-db", Seq.empty)
+        DbMapping(ServiceName("service-one"), "service-one", Seq("service-one-frontend"), Seq("team-one")),
+        DbMapping(ServiceName("service-one-frontend"), "service-one-frontend", Seq.empty, Seq("team-one")),
+        DbMapping(ServiceName("service-two"), "service-two", Seq.empty, Seq("team-two")),
+        DbMapping(ServiceName("service-three"), "random-db", Seq.empty, Seq("team-three"))
       )
 
       service.getMappings(Environment.QA).futureValue should contain theSameElementsAs expected

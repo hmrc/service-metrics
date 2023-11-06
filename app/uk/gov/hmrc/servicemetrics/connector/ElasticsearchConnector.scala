@@ -51,7 +51,7 @@ class ElasticsearchConnector @Inject()(
                                               }
 
   def getSlowQueries(environment: Environment, database: String)(implicit hc: HeaderCarrier): Future[Seq[MongoQueryLog]] =
-    getMongoDbLogs(environment, s"duration:>${elasticsearchConfig.longRunningQueryInMilliseconds} AND database: $database")
+    getMongoDbLogs(environment, s"duration:>${elasticsearchConfig.longRunningQueryInMilliseconds} AND NOT mongo_db: backup_mongodb AND database: $database")
 
   def getNonIndexedQueries(environment: Environment, database: String)(implicit hc: HeaderCarrier): Future[Seq[MongoQueryLog]] =
     getMongoDbLogs(environment, s"scan: COLLSCAN AND NOT mongo_db: backup_mongodb AND database: $database")
