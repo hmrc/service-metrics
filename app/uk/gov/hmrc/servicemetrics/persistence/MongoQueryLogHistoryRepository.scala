@@ -114,6 +114,7 @@ object MongoQueryLogHistoryRepository {
     service    : String,
     queryType  : MongoQueryType,
     environment: Environment,
+    teams      : Seq[String],
   )
 
   object MongoQueryLogHistory{
@@ -128,6 +129,7 @@ object MongoQueryLogHistoryRepository {
       ~ (__ \ "service"    ).format[String]
       ~ (__ \ "queryType"  ).format[MongoQueryType](MongoQueryType.format)
       ~ (__ \ "environment").format[Environment](Environment.format)
+      ~ (__ \ "teams"      ).format[Seq[String]]
       )(MongoQueryLogHistory.apply _, unlift(MongoQueryLogHistory.unapply _))
   }
 

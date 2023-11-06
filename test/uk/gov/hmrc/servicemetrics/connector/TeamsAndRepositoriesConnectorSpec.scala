@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.{Service, ServiceName}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -107,7 +107,16 @@ with MockitoSugar {
           )
       )
 
-      val expected = Seq(ServiceName("service-one"), ServiceName("service-two"))
+      val expected = Seq(
+        Service(
+          ServiceName("service-one"),
+          Seq("Team One")
+        ), 
+        Service(
+          ServiceName("service-two"),
+          Seq("Team Two")
+        )
+      )
 
       val response = connector.allServices().futureValue
 
