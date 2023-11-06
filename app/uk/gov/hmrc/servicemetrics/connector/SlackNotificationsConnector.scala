@@ -54,6 +54,7 @@ object SlackNotificationsFormats {
     implicit val clWrites: Writes[ChannelLookup] = Writes {
       case s: OwningTeams   => Json.toJson(s)(Json.writes[OwningTeams])
       case s: SlackChannels => Json.toJson(s)(Json.writes[SlackChannels])
+      case s: GithubTeam    => Json.toJson(s)(Json.writes[GithubTeam])
     }
 
     Json.writes[SlackNotificationRequest]
@@ -75,6 +76,11 @@ final case class SlackNotificationResponse(
 )
 
 sealed trait ChannelLookup { def by: String }
+
+final case class GithubTeam(
+  repositoryName: String,
+  by            : String = "github-team"
+) extends ChannelLookup
 
 final case class OwningTeams(
   repositoryName: String,

@@ -45,6 +45,7 @@ class MongoQueryLogHistoryRepositorySpec
         service     = "service",
         queryType   = queryType,
         environment = env,
+        teams       = Seq("team")
       )
     )
 
