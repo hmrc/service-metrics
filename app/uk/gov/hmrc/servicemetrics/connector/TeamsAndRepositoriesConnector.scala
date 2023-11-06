@@ -16,12 +16,13 @@
 
 package uk.gov.hmrc.servicemetrics.connector
 
-import play.api.libs.json.{Reads, __}
+import play.api.libs.functional.syntax.toFunctionalBuilderOps
+import play.api.libs.json._
+import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
-import uk.gov.hmrc.http.HttpReads.Implicits._
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.Service
 
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
@@ -35,11 +36,11 @@ class TeamsAndRepositoriesConnector @Inject() (
   private val teamsAndRepositoriesBaseUrl: String =
     servicesConfig.baseUrl("teams-and-repositories")
 
-  def allServices()(implicit hc: HeaderCarrier): Future[Seq[ServiceName]] = {
-    implicit val reads: Reads[ServiceName] = ServiceName.reads
+  def allServices()(implicit hc: HeaderCarrier): Future[Seq[Service]] = {
+    implicit val reads: Reads[Service] = Service.reads
     httpClientV2
       .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories")
-      .execute[Seq[ServiceName]]
+      .execute[Seq[Service]]
   }
 
 }
@@ -47,8 +48,15 @@ class TeamsAndRepositoriesConnector @Inject() (
 object TeamsAndRepositoriesConnector {
   case class ServiceName(value: String) extends AnyVal
 
-  object ServiceName {
-    val reads: Reads[ServiceName] =
-      Reads.at[String](__ \ "name").map(ServiceName(_))
+  case class Service(
+    name: ServiceName,
+    teamNames: Seq[String]
+  )
+
+  object Service {
+    val reads: Reads[Service] =
+      ( (__ \ "name"     ).read[String].map(ServiceName(_))
+      ~ (__ \ "teamNames"  ).read[Seq[String]]
+      )(Service.apply _)
   }
 }
