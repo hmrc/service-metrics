@@ -71,8 +71,8 @@ object MongoQueryNotificationRepository {
   val collectionName = "mongoQueryNotifications"
 
   final case class MongoQueryNotification(
-    collection : String,
     service    : String,
+    database   : String,
     environment: Environment,
     queryType  : MongoQueryType,
     timestamp  : Instant,
@@ -82,8 +82,8 @@ object MongoQueryNotificationRepository {
   object MongoQueryNotification {
     private implicit val instantFormat: Format[Instant] = MongoJavatimeFormats.instantFormat
     val format: Format[MongoQueryNotification] = 
-      (  (__ \ "collection" ).format[String]
-      ~  (__ \ "service"    ).format[String]
+      (  (__ \ "service"    ).format[String]
+      ~  (__ \ "database"   ).format[String]
       ~  (__ \ "environment").format[Environment](Environment.format)
       ~  (__ \ "queryType"  ).format[MongoQueryType](MongoQueryType.format)
       ~  (__ \ "timestamp"  ).format[Instant]

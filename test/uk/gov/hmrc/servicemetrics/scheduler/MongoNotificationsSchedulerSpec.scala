@@ -51,11 +51,13 @@ class MongoNotificationsSchedulerSpec
       "there are non performant queries to be notified of and notifications are enabled" in new MongoNotificationsSchedulerFixture(
         queries = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
           timestamp   = Instant.now,
-          collection  = "collection",
+          since       = Instant.now.minusSeconds(20),
+          details     = Seq(MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
+            collection  = "collection",
+            duration    = 3001,
+            occurrences = 1
+          )),
           database    = "database",
-          mongoDb     = "mongoDb",
-          operation   = Some("{}"),
-          duration    = 3001,
           service     = "service",
           queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
           environment = Environment.QA,
@@ -79,7 +81,7 @@ class MongoNotificationsSchedulerSpec
       }
     }
     "do not notify teams of performant queries" when {
-      "there are no non performant queries" ignore new MongoNotificationsSchedulerFixture(){
+      "there are no non performant queries" in new MongoNotificationsSchedulerFixture(){
         val env  = Environment.QA
         val from = Instant.now()
         val to   = from.plusSeconds(3600)
@@ -94,15 +96,17 @@ class MongoNotificationsSchedulerSpec
         verify(mockMongoService, times(0)).hasBeenNotified(any[String])
         verify(mockSlackNotificationsConnector, times(0)).sendMessage(any[SlackNotificationRequest])
       }
-      "notification has been already triggered for this service, environment, collection and query type" ignore new MongoNotificationsSchedulerFixture(
+      "notification has been already triggered for this service, environment, collection and query type" in new MongoNotificationsSchedulerFixture(
         hasBeenNotified = true,
         queries = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
           timestamp   = Instant.now,
-          collection  = "collection",
+          since       = Instant.now.minusSeconds(20),
+          details     = Seq(MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
+            collection  = "collection",
+            duration    = 3001,
+            occurrences = 1
+          )),
           database    = "database",
-          mongoDb     = "mongoDb",
-          operation   = Some("{}"),
-          duration    = 3001,
           service     = "service",
           queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
           environment = Environment.QA,
@@ -127,11 +131,13 @@ class MongoNotificationsSchedulerSpec
         areNotificationEnabled = false,
         queries = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
           timestamp   = Instant.now,
-          collection  = "collection",
+          since       = Instant.now.minusSeconds(20),
           database    = "database",
-          mongoDb     = "mongoDb",
-          operation   = Some("{}"),
-          duration    = 3001,
+          details     = Seq(MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
+            collection  = "collection",
+            duration    = 3001,
+            occurrences = 1
+          )),
           service     = "service",
           queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
           environment = Environment.QA,
