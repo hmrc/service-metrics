@@ -51,6 +51,7 @@ class MongoQueryNotificationRepositorySpec
     |    notification-period = 1.days
     |    throttling-period   = 7.days
     |    notify-teams = false
+    |    notification-channel = "channel"
     |
     |    kibana {
     |      baseUrl = "http://logs.$${env}.local"
@@ -67,8 +68,8 @@ class MongoQueryNotificationRepositorySpec
   private def seed(env: Environment) = Seq(
     MongoQueryNotificationRepository.MongoQueryNotification(
       timestamp   = Instant.now,
-      collection  = "collection",
       service     = "service",
+      database    = "database",
       queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
       environment = env,
       team        = "team"
