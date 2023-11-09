@@ -33,6 +33,4 @@ class ElasticsearchConfig @Inject() (
                                                                              ).toMap
   lazy val mongoDbIndex                         : String                   = servicesConfig.getString("microservice.services.elasticsearch.mongodb-index")
   lazy val longRunningQueryInMilliseconds       : Int                      = servicesConfig.getInt("microservice.services.elasticsearch.long-running-query-in-milliseconds")
-  lazy val nonPerformantQueriesIntervalInMinutes: Int                      = servicesConfig.getInt("microservice.services.elasticsearch.non-performant-queries-interval-in-minutes")
-
 }

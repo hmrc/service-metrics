@@ -16,7 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
-import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
+import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes, Sorts}
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import uk.gov.hmrc.mongo.MongoComponent
@@ -99,35 +99,52 @@ class MongoQueryLogHistoryRepository @Inject()(
 
   def insertMany(logs: Seq[MongoQueryLogHistory]): Future[Unit] =
     collection.insertMany(logs).toFuture().map(_ => ())
+
+  def lastInsertDate(): Future[Option[Instant]] =
+    collection
+      .find()
+      .sort(Sorts.descending("timestamp"))
+      .limit(1)
+      .map(_.timestamp)
+      .headOption()
 }
 
 object MongoQueryLogHistoryRepository {
   val collectionName = "mongoQueryLogHistory"
 
+  final case class NonPerformantQueryDetails(
+    collection : String,
+    duration   : Int,
+    occurrences: Int
+  )
+
+  object NonPerformantQueryDetails {
+    val format: Format[NonPerformantQueryDetails] =
+      ( (__ \ "collection").format[String]
+      ~ (__ \ "duration"  ).format[Int]
+      ~ (__ \ "occurences").format[Int]
+      )(NonPerformantQueryDetails.apply _, unlift(NonPerformantQueryDetails.unapply _))
+  }
+
   final case class MongoQueryLogHistory(
     timestamp  : Instant,
-    collection : String,
     database   : String,
-    mongoDb    : String,
-    operation  : Option[String],
-    duration   : Int,
     service    : String,
     queryType  : MongoQueryType,
+    details    : Seq[NonPerformantQueryDetails],
     environment: Environment,
     teams      : Seq[String],
   )
 
-  object MongoQueryLogHistory{
+  object MongoQueryLogHistory {
     private implicit val instantFormat: Format[Instant] = MongoJavatimeFormats.instantFormat
+    private implicit val npqdF: Format[NonPerformantQueryDetails] = NonPerformantQueryDetails.format
     val format: Format[MongoQueryLogHistory] =
       ( (__ \ "timestamp"  ).format[Instant]
-      ~ (__ \ "collection" ).format[String]
       ~ (__ \ "database"   ).format[String]
-      ~ (__ \ "mongoDb"    ).format[String]
-      ~ (__ \ "operation"  ).formatNullable[String]
-      ~ (__ \ "duration"   ).format[Int]
       ~ (__ \ "service"    ).format[String]
       ~ (__ \ "queryType"  ).format[MongoQueryType](MongoQueryType.format)
+      ~ (__ \ "details"    ).format[Seq[NonPerformantQueryDetails]]
       ~ (__ \ "environment").format[Environment](Environment.format)
       ~ (__ \ "teams"      ).format[Seq[String]]
       )(MongoQueryLogHistory.apply _, unlift(MongoQueryLogHistory.unapply _))
