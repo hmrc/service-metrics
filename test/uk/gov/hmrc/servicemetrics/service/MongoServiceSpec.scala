@@ -32,6 +32,7 @@ import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
 import java.time.LocalDate
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import java.time.Instant
 
 class MongoServiceSpec
   extends AnyWordSpec
@@ -95,31 +96,36 @@ class MongoServiceSpec
         when(mockGitHubProxyConnector.getMongoOverrides(any[Environment])(any[HeaderCarrier]))
           .thenReturn(Future.successful(Seq.empty))
 
-        when(mockElasticsearchConnector.getSlowQueries(any[Environment], any[String])(any[HeaderCarrier]))
-          .thenReturn(Future.successful(Seq(
+        when(mockElasticsearchConnector.getSlowQueries(any[Environment], any[String], any[Instant], any[Instant])(any[HeaderCarrier]))
+          .thenReturn(Future.successful(Some(
             ElasticsearchConnector.MongoQueryLog(
               java.time.Instant.now,
-              "collection",
+              java.time.Instant.now,
+              Seq(ElasticsearchConnector.MongoCollectionNonPerfomantQuery(
+                "collection",
+                3001,
+                1,
+              )),
               "database",
-              "mongoDb",
-              Some("{}"),
-              3001,
             )
           )))
 
-        when(mockElasticsearchConnector.getNonIndexedQueries(any[Environment], any[String])(any[HeaderCarrier]))
-          .thenReturn(Future.successful(Seq.empty))
+        when(mockElasticsearchConnector.getNonIndexedQueries(any[Environment], any[String], any[Instant], any[Instant])(any[HeaderCarrier]))
+          .thenReturn(Future.successful(None))
 
         when(mockQueryLogHistoryRepository.insertMany(any[Seq[MongoQueryLogHistoryRepository.MongoQueryLogHistory]]))
           .thenReturn(Future.unit)
+
+        when(mockQueryLogHistoryRepository.lastInsertDate())
+          .thenReturn(Future.successful(Some(Instant.now())))
 
         service.insertQueryLogs(Environment.QA).futureValue shouldBe a[Unit]
 
         verify(mockClickHouseConnector, times(1)).getDatabaseNames(Environment.QA)(hc)
         verify(mockTeamsAndReposConnector, times(1)).allServices()(hc)
         verify(mockGitHubProxyConnector, times(1)).getMongoOverrides(Environment.QA)(hc)
-        verify(mockElasticsearchConnector, times(1)).getSlowQueries(Environment.QA, "service-one")(hc)
-        verify(mockElasticsearchConnector, times(1)).getNonIndexedQueries(Environment.QA, "service-one")(hc)
+        verify(mockElasticsearchConnector, times(1)).getSlowQueries(same(Environment.QA), same("service-one"), any[Instant], any[Instant])(same(hc))
+        verify(mockElasticsearchConnector, times(1)).getNonIndexedQueries(same(Environment.QA), same("service-one"), any[Instant], any[Instant])(same(hc))
         verify(mockQueryLogHistoryRepository, times(1)).insertMany(anySeq[MongoQueryLogHistoryRepository.MongoQueryLogHistory])
       }
     }
