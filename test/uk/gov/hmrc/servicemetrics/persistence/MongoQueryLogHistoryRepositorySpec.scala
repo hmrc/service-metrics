@@ -37,11 +37,14 @@ class MongoQueryLogHistoryRepositorySpec
     ) = mongoQueryTypes.map(queryType =>
       MongoQueryLogHistoryRepository.MongoQueryLogHistory(
         timestamp   = Instant.now,
-        collection  = "collection",
         database    = "database",
-        mongoDb     = "mongoDb",
-        operation   = Some("{}"),
-        duration    = 3001,
+        details     = Seq(
+          MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
+            occurrences = 1,
+            collection  = "collection",
+            duration    = 3001,
+          )
+        ),
         service     = "service",
         queryType   = queryType,
         environment = env,
