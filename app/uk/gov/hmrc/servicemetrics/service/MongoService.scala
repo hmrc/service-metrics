@@ -31,6 +31,7 @@ import uk.gov.hmrc.servicemetrics.persistence.MongoQueryNotificationRepository
 import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
 
 import java.time.{Instant, LocalDate, ZoneOffset}
+import java.time.temporal.ChronoUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -94,11 +95,16 @@ class MongoService @Inject()(
 
   def insertQueryLogs(environment: Environment)(implicit hc: HeaderCarrier): Future[Unit] = {
     for {
-      mappings    <- getMappings(environment)
-      queryLogs   <- mappings.foldLeftM[Future, Seq[MongoQueryLogHistory]](Seq.empty){
-                       (acc, mapping) => getQueryLogs(mapping, environment).map(acc ++ _)
-                     }
-      _           <- if (queryLogs.nonEmpty)
+      lastInsertDate  <- queryLogHistoryRepository.lastInsertDate()
+                          .map(_.getOrElse(Instant.now().minus(1, ChronoUnit.HOURS)))
+      currentDate     =  Instant.now
+      mappings        <- getMappings(environment)
+      queryLogs       <- mappings.foldLeftM[Future, Seq[MongoQueryLogHistory]](Seq.empty){
+                           (acc, mapping) => getQueryLogs(mapping, environment, lastInsertDate, currentDate).map(
+                              acc ++ _
+                            )
+                         }
+      _               <- if (queryLogs.nonEmpty)
         queryLogHistoryRepository.insertMany(queryLogs)
         else
           Future.unit
@@ -144,13 +150,15 @@ class MongoService @Inject()(
   private[service] def getQueryLogs(
     mapping    : DbMapping
   , environment: Environment
+  , from       : Instant
+  , to         : Instant
   )(implicit hc: HeaderCarrier): Future[Seq[MongoQueryLogHistory]] =
     for {
-      slowQueries       <- elasticsearchConnector.getSlowQueries(environment, mapping.database)
+      slowQueries       <- elasticsearchConnector.getSlowQueries(environment, mapping.database, from, to)
                             .map(_.map(toLogHistory(MongoQueryType.SlowQuery, mapping.service.value, environment, mapping.teams)))
-      nonIndexedQueries <- elasticsearchConnector.getNonIndexedQueries(environment, mapping.database)
+      nonIndexedQueries <- elasticsearchConnector.getNonIndexedQueries(environment, mapping.database, from, to)
                             .map(_.map(toLogHistory(MongoQueryType.NonIndexedQuery, mapping.service.value, environment, mapping.teams)))
-    } yield slowQueries ++ nonIndexedQueries
+    } yield Seq(slowQueries, nonIndexedQueries).flatten
 
   private def toLogHistory(
     queryType  : MongoQueryType,
@@ -159,13 +167,17 @@ class MongoService @Inject()(
     teams      : Seq[String])(log: MongoQueryLog): MongoQueryLogHistory =
       MongoQueryLogHistory(
             timestamp   = log.timestamp,
-            collection  = log.collection,
+            since       = log.since,
             database    = log.database,
-            mongoDb     = log.mongoDb,
-            operation   = log.operation,
-            duration    = log.duration,
             service     = service,
             queryType   = queryType,
+            details     = log.nonPerformantQueries.map(npq =>
+                            NonPerformantQueryDetails(
+                              npq.collection,
+                              npq.duration,
+                              npq.occurrences,
+                            )
+                          ),
             environment = environment,
             teams       = teams,
           )

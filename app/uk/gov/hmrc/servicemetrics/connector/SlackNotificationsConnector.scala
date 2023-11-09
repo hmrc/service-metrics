@@ -18,6 +18,7 @@ package uk.gov.hmrc.servicemetrics.connector
 
 import javax.inject.{Inject, Singleton}
 import play.api.libs.json._
+import play.api.libs.functional.syntax._
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.HttpReads.Implicits._
@@ -61,8 +62,14 @@ object SlackNotificationsFormats {
   }
 
   val snresReads: Reads[SlackNotificationResponse] = {
-    implicit val sneReads: Reads[SlackNotificationError] = Json.reads[SlackNotificationError]
-    Json.reads[SlackNotificationResponse]
+    implicit val sneReads: Reads[SlackNotificationError] =
+      ( (__ \ "code"   ).read[String]
+      ~ (__ \ "message").read[String]
+      )(SlackNotificationError.apply _)
+
+    (__ \ "errors")
+      .readWithDefault[List[SlackNotificationError]](List.empty)
+      .map(SlackNotificationResponse.apply)
   }
 }
 
@@ -108,7 +115,10 @@ object SlackNotificationRequest {
     ) :: (referenceUrl match {
       case Some((url, title)) =>
         Json.obj("type" -> JsString("divider"))                                      ::
-        Json.obj("type" -> JsString("mrkdwn"), "text" -> JsString(s"<$url|$title>")) ::
+        Json.obj(
+            "type" -> JsString("section")
+          , "text" -> Json.obj("type" -> JsString("mrkdwn"), "text" -> JsString(s"<$url|$title>"))
+        ) ::
         Nil
       case None               => Nil
     })
