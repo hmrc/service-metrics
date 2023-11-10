@@ -48,4 +48,6 @@ object SchedulerConfig {
 class SchedulerConfigs @Inject()(configuration: Configuration) {
   val mongoMetricsScheduler       = SchedulerConfig(configuration, "mongo-metrics-scheduler")
   val mongoNotificationsScheduler = SchedulerConfig(configuration, "mongo-notifications-scheduler")
+
+  val collectNonPerfomantQueriesEnabled = configuration.get[Boolean]("feature.collect-non-performant-queries-enabled")
 }

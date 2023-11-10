@@ -195,6 +195,9 @@ class MongoNotificationsSchedulerSpec
       |    }
       |  }
       |}
+      |feature {
+      |  collect-non-performant-queries-enabled = false
+      |}
       |""".stripMargin))
     val schedulerConfigs                = new SchedulerConfigs(config)
     val mockMongoLockRepository         = mock[MongoLockRepository]
