@@ -67,12 +67,16 @@ class MongoMetricsScheduler @Inject()(
                 logger.error(s"Failed to update mongo collection sizes for ${env.asString}", e)
                 Future.unit
             }
-      _ <- mongoMetricsService
+      _ <- 
+          if (schedulerConfig.collectNonPerfomantQueriesEnabled)
+             mongoMetricsService
             .insertQueryLogs(env)
             .recoverWith {
               case NonFatal(e) =>
                 logger.error(s"Failed to insert mongo query logs for ${env.asString}", e)
                 Future.unit
             }
+          else
+            Future.unit
     } yield ()
 }
