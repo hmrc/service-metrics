@@ -18,6 +18,7 @@ package uk.gov.hmrc.servicemetrics.connector
 
 import javax.inject.{Inject, Singleton}
 import play.api.libs.json._
+import play.api.libs.functional.syntax._
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.HttpReads.Implicits._
@@ -54,14 +55,21 @@ object SlackNotificationsFormats {
     implicit val clWrites: Writes[ChannelLookup] = Writes {
       case s: OwningTeams   => Json.toJson(s)(Json.writes[OwningTeams])
       case s: SlackChannels => Json.toJson(s)(Json.writes[SlackChannels])
+      case s: GithubTeam    => Json.toJson(s)(Json.writes[GithubTeam])
     }
 
     Json.writes[SlackNotificationRequest]
   }
 
   val snresReads: Reads[SlackNotificationResponse] = {
-    implicit val sneReads: Reads[SlackNotificationError] = Json.reads[SlackNotificationError]
-    Json.reads[SlackNotificationResponse]
+    implicit val sneReads: Reads[SlackNotificationError] =
+      ( (__ \ "code"   ).read[String]
+      ~ (__ \ "message").read[String]
+      )(SlackNotificationError.apply _)
+
+    (__ \ "errors")
+      .readWithDefault[List[SlackNotificationError]](List.empty)
+      .map(SlackNotificationResponse.apply)
   }
 }
 
@@ -75,6 +83,11 @@ final case class SlackNotificationResponse(
 )
 
 sealed trait ChannelLookup { def by: String }
+
+final case class GithubTeam(
+  repositoryName: String,
+  by            : String = "github-team"
+) extends ChannelLookup
 
 final case class OwningTeams(
   repositoryName: String,
@@ -91,19 +104,16 @@ final case class SlackNotificationRequest(
   displayName  : String,
   emoji        : String,
   text         : String,
-  blocks       : Seq[JsObject]
+  blocks       : Seq[JsValue]
 )
 
 object SlackNotificationRequest {
-  def toBlocks(message: String, referenceUrl: Option[(java.net.URL, String)]): Seq[JsObject] =
-    Json.obj(
-      "type" -> JsString("section")
-    , "text" -> Json.obj("type" -> JsString("mrkdwn"), "text" -> JsString(message))
-    ) :: (referenceUrl match {
-      case Some((url, title)) =>
-        Json.obj("type" -> JsString("divider"))                                      ::
-        Json.obj("type" -> JsString("mrkdwn"), "text" -> JsString(s"<$url|$title>")) ::
-        Nil
-      case None               => Nil
-    })
+  def toBlocks(messages: Seq[String]): Seq[JsValue] =
+    Json.parse("""{"type": "divider"}"""") +: messages.map(message => Json.parse(s"""{
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "${message.replace("\n","\\n")}"
+        }
+      }"""))
 }

@@ -49,6 +49,7 @@ class MongoQueryNotificationRepository @Inject()(
       IndexModel(Indexes.ascending("environment")),
       IndexModel(Indexes.ascending("queryType")),
       IndexModel(Indexes.ascending("collection")),
+      IndexModel(Indexes.ascending("team")),
       IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(slackNotifiactionsConfig.throttlingPeriod.toDays, TimeUnit.DAYS)),
     ),
   extraCodecs    = Seq(Codecs.playFormatCodec(MongoQueryType.format))
@@ -57,17 +58,9 @@ class MongoQueryNotificationRepository @Inject()(
   def insertMany(notifications: Seq[MongoQueryNotification]): Future[Unit] =
     collection.insertMany(notifications).toFuture().map(_ => ())
 
-  def hasBeenNotified(
-    affectedCollection: String,
-    environment       : Environment,
-    service           : String,
-    queryType         : MongoQueryType,
-  ): Future[Boolean] =
+  def hasBeenNotified(team: String): Future[Boolean] =
     collection.find(Filters.and(
-      Filters.eq("service", service),
-      Filters.eq("environment", environment.asString),
-      Filters.eq("queryType", queryType.value),
-      Filters.eq("collection", affectedCollection),
+      Filters.eq("team", team)
     ))
       .limit(1)
       .headOption()
@@ -78,21 +71,23 @@ object MongoQueryNotificationRepository {
   val collectionName = "mongoQueryNotifications"
 
   final case class MongoQueryNotification(
-    collection : String,
     service    : String,
+    database   : String,
     environment: Environment,
     queryType  : MongoQueryType,
-    timestamp  : Instant
+    timestamp  : Instant,
+    team       : String,
   )
 
   object MongoQueryNotification {
     private implicit val instantFormat: Format[Instant] = MongoJavatimeFormats.instantFormat
     val format: Format[MongoQueryNotification] = 
-      (  (__ \ "collection" ).format[String]
-      ~  (__ \ "service"    ).format[String]
+      (  (__ \ "service"    ).format[String]
+      ~  (__ \ "database"   ).format[String]
       ~  (__ \ "environment").format[Environment](Environment.format)
       ~  (__ \ "queryType"  ).format[MongoQueryType](MongoQueryType.format)
       ~  (__ \ "timestamp"  ).format[Instant]
+      ~  (__ \ "team"       ).format[String]
       )(MongoQueryNotification.apply _, unlift(MongoQueryNotification.unapply _))
   }
 }

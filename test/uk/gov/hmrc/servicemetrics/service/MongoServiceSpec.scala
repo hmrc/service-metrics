@@ -24,7 +24,7 @@ import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
-import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.{Service, ServiceName}
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository, MongoQueryNotificationRepository}
 import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
@@ -32,6 +32,7 @@ import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
 import java.time.LocalDate
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import java.time.Instant
 
 class MongoServiceSpec
   extends AnyWordSpec
@@ -82,7 +83,7 @@ class MongoServiceSpec
     "insert mongodb logs" when {
       "there are slow queries in ES" in new Setup {
         val databases = Seq("service-one")
-        val knownServices = Seq("service-one").map(ServiceName.apply)
+        val knownServices = Seq(Service(ServiceName("service-one"), Seq("team-one")))
 
         implicit val hc: HeaderCarrier = HeaderCarrier()
 
@@ -95,31 +96,36 @@ class MongoServiceSpec
         when(mockGitHubProxyConnector.getMongoOverrides(any[Environment])(any[HeaderCarrier]))
           .thenReturn(Future.successful(Seq.empty))
 
-        when(mockElasticsearchConnector.getSlowQueries(any[Environment], any[String])(any[HeaderCarrier]))
-          .thenReturn(Future.successful(Seq(
+        when(mockElasticsearchConnector.getSlowQueries(any[Environment], any[String], any[Instant], any[Instant])(any[HeaderCarrier]))
+          .thenReturn(Future.successful(Some(
             ElasticsearchConnector.MongoQueryLog(
               java.time.Instant.now,
-              "collection",
+              java.time.Instant.now,
+              Seq(ElasticsearchConnector.MongoCollectionNonPerfomantQuery(
+                "collection",
+                3001,
+                1,
+              )),
               "database",
-              "mongoDb",
-              Some("{}"),
-              3001,
             )
           )))
 
-        when(mockElasticsearchConnector.getNonIndexedQueries(any[Environment], any[String])(any[HeaderCarrier]))
-          .thenReturn(Future.successful(Seq.empty))
+        when(mockElasticsearchConnector.getNonIndexedQueries(any[Environment], any[String], any[Instant], any[Instant])(any[HeaderCarrier]))
+          .thenReturn(Future.successful(None))
 
         when(mockQueryLogHistoryRepository.insertMany(any[Seq[MongoQueryLogHistoryRepository.MongoQueryLogHistory]]))
           .thenReturn(Future.unit)
+
+        when(mockQueryLogHistoryRepository.lastInsertDate())
+          .thenReturn(Future.successful(Some(Instant.now())))
 
         service.insertQueryLogs(Environment.QA).futureValue shouldBe a[Unit]
 
         verify(mockClickHouseConnector, times(1)).getDatabaseNames(Environment.QA)(hc)
         verify(mockTeamsAndReposConnector, times(1)).allServices()(hc)
         verify(mockGitHubProxyConnector, times(1)).getMongoOverrides(Environment.QA)(hc)
-        verify(mockElasticsearchConnector, times(1)).getSlowQueries(Environment.QA, "service-one")(hc)
-        verify(mockElasticsearchConnector, times(1)).getNonIndexedQueries(Environment.QA, "service-one")(hc)
+        verify(mockElasticsearchConnector, times(1)).getSlowQueries(same(Environment.QA), same("service-one"), any[Instant], any[Instant])(same(hc))
+        verify(mockElasticsearchConnector, times(1)).getNonIndexedQueries(same(Environment.QA), same("service-one"), any[Instant], any[Instant])(same(hc))
         verify(mockQueryLogHistoryRepository, times(1)).insertMany(anySeq[MongoQueryLogHistoryRepository.MongoQueryLogHistory])
       }
     }
@@ -161,7 +167,12 @@ class MongoServiceSpec
   "getMappings" should {
     "map a database to a service taking into account overrides and similarly named dbs" in new Setup {
       val databases = Seq("service-one", "service-one-frontend", "service-two", "random-db")
-      val knownServices = Seq("service-one", "service-two", "service-one-frontend", "service-three").map(ServiceName.apply)
+      val knownServices = Seq(
+        Service(ServiceName("service-one"), Seq("team-one")),
+        Service(ServiceName("service-two"), Seq("team-two")),
+        Service(ServiceName("service-one-frontend"), Seq("team-one")),
+        Service(ServiceName("service-three"), Seq("team-three"))
+      )
       val dbOverrides = Seq(DbOverride("service-three", Seq("random-db")))
 
       implicit val hc: HeaderCarrier = HeaderCarrier()
@@ -176,10 +187,10 @@ class MongoServiceSpec
       .thenReturn(Future.successful(dbOverrides))
 
       val expected = Seq(
-        DbMapping(ServiceName("service-one"), "service-one", Seq("service-one-frontend")),
-        DbMapping(ServiceName("service-one-frontend"), "service-one-frontend", Seq.empty),
-        DbMapping(ServiceName("service-two"), "service-two", Seq.empty),
-        DbMapping(ServiceName("service-three"), "random-db", Seq.empty)
+        DbMapping(ServiceName("service-one"), "service-one", Seq("service-one-frontend"), Seq("team-one")),
+        DbMapping(ServiceName("service-one-frontend"), "service-one-frontend", Seq.empty, Seq("team-one")),
+        DbMapping(ServiceName("service-two"), "service-two", Seq.empty, Seq("team-two")),
+        DbMapping(ServiceName("service-three"), "random-db", Seq.empty, Seq("team-three"))
       )
 
       service.getMappings(Environment.QA).futureValue should contain theSameElementsAs expected

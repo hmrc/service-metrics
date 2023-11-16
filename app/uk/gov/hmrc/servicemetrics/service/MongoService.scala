@@ -31,6 +31,7 @@ import uk.gov.hmrc.servicemetrics.persistence.MongoQueryNotificationRepository
 import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
 
 import java.time.{Instant, LocalDate, ZoneOffset}
+import java.time.temporal.ChronoUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -78,31 +79,40 @@ class MongoService @Inject()(
   ): Future[Seq[MongoQueryLogHistory]] =
     queryLogHistoryRepository.getAll(environment, from, to)
 
+  def getAllQueriesGroupedByTeam(
+    environment: Environment,
+    from       : Instant,
+    to         : Instant,
+  ): Future[Map[String, Seq[MongoQueryLogHistory]]] =
+    queryLogHistoryRepository.getAll(environment, from, to)
+      .map(_.foldLeft(Map[String, Seq[MongoQueryLogHistory]]()){ case (acc, mongoQueryLogHistory) =>
+        mongoQueryLogHistory.teams.foldLeft(acc){ case (accTeamQueries, team) =>
+          accTeamQueries.updatedWith(team)(
+            _.fold(Some(Seq(mongoQueryLogHistory)))(f => Some(f :+ mongoQueryLogHistory))
+          )
+        }
+      })
+
   def insertQueryLogs(environment: Environment)(implicit hc: HeaderCarrier): Future[Unit] = {
     for {
-      mappings    <- getMappings(environment)
-      queryLogs   <- mappings.foldLeftM[Future, Seq[MongoQueryLogHistory]](Seq.empty){
-                       (acc, mapping) => getQueryLogs(mapping, environment).map(acc ++ _)
-                     }
-      _           <- if (queryLogs.nonEmpty)
+      lastInsertDate  <- queryLogHistoryRepository.lastInsertDate()
+                          .map(_.getOrElse(Instant.now().minus(1, ChronoUnit.HOURS)))
+      currentDate     =  Instant.now
+      mappings        <- getMappings(environment)
+      queryLogs       <- mappings.foldLeftM[Future, Seq[MongoQueryLogHistory]](Seq.empty){
+                           (acc, mapping) => getQueryLogs(mapping, environment, lastInsertDate, currentDate).map(
+                              acc ++ _
+                            )
+                         }
+      _               <- if (queryLogs.nonEmpty)
         queryLogHistoryRepository.insertMany(queryLogs)
         else
           Future.unit
     } yield logger.info(s"Successfully added query logs for ${environment.asString}")
   }
 
-  def hasBeenNotified(
-    collection : String,
-    environment: Environment,
-    service    : String,
-    queryType  : MongoQueryType,
-  ): Future[Boolean] =
-    queryNotificationRepository.hasBeenNotified(
-      collection,
-      environment,
-      service,
-      queryType
-    )
+  def hasBeenNotified(team : String): Future[Boolean] =
+    queryNotificationRepository.hasBeenNotified(team)
 
   def flagAsNotified(notifications: Seq[MongoQueryNotificationRepository.MongoQueryNotification]): Future[Unit] =
     queryNotificationRepository.insertMany(notifications)
@@ -140,46 +150,56 @@ class MongoService @Inject()(
   private[service] def getQueryLogs(
     mapping    : DbMapping
   , environment: Environment
+  , from       : Instant
+  , to         : Instant
   )(implicit hc: HeaderCarrier): Future[Seq[MongoQueryLogHistory]] =
     for {
-      slowQueries       <- elasticsearchConnector.getSlowQueries(environment, mapping.database)
-                            .map(_.map(toLogHistory(MongoQueryType.SlowQuery, mapping.service.value, environment)))
-      nonIndexedQueries <- elasticsearchConnector.getNonIndexedQueries(environment, mapping.database)
-                            .map(_.map(toLogHistory(MongoQueryType.NonIndexedQuery, mapping.service.value, environment)))
-    } yield slowQueries ++ nonIndexedQueries
+      slowQueries       <- elasticsearchConnector.getSlowQueries(environment, mapping.database, from, to)
+                            .map(_.map(toLogHistory(MongoQueryType.SlowQuery, mapping.service.value, environment, mapping.teams)))
+      nonIndexedQueries <- elasticsearchConnector.getNonIndexedQueries(environment, mapping.database, from, to)
+                            .map(_.map(toLogHistory(MongoQueryType.NonIndexedQuery, mapping.service.value, environment, mapping.teams)))
+    } yield Seq(slowQueries, nonIndexedQueries).flatten
 
   private def toLogHistory(
     queryType  : MongoQueryType,
     service    : String,
-    environment: Environment)(log: MongoQueryLog): MongoQueryLogHistory =
+    environment: Environment,
+    teams      : Seq[String])(log: MongoQueryLog): MongoQueryLogHistory =
       MongoQueryLogHistory(
             timestamp   = log.timestamp,
-            collection  = log.collection,
+            since       = log.since,
             database    = log.database,
-            mongoDb     = log.mongoDb,
-            operation   = log.operation,
-            duration    = log.duration,
             service     = service,
             queryType   = queryType,
+            details     = log.nonPerformantQueries.map(npq =>
+                            NonPerformantQueryDetails(
+                              npq.collection,
+                              npq.duration,
+                              npq.occurrences,
+                            )
+                          ),
             environment = environment,
+            teams       = teams,
           )
 
   private[service] def getMappings(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[DbMapping]] =
     for {
-      databases     <- clickHouseConnector.getDatabaseNames(environment)
-      knownServices <- teamsAndRepositoriesConnector.allServices()
-      dbOverrides   <- gitHubProxyConnector.getMongoOverrides(environment)
+      databases         <- clickHouseConnector.getDatabaseNames(environment)
+      knownServices     <- teamsAndRepositoriesConnector.allServices()
+      dbOverrides       <- gitHubProxyConnector.getMongoOverrides(environment)
+
       mappings      =  for {
                        database    <- databases
                        filterOut   =  databases.filter(_.startsWith(database + "-"))
                        services    =  dbOverrides.filter(_.dbs.contains(database)).toList match {
-                                       case Nil => knownServices.filter(_.value == database)
-                                       case List(o) => knownServices.filter(_.value == o.service)
-                                       case overrides => overrides.flatMap(o => knownServices.filter(_.value == o.service))
+                                       case Nil => knownServices.filter(_.name.value == database)
+                                       case List(o) => knownServices.filter(_.name.value == o.service)
+                                       case overrides => overrides.flatMap(o => knownServices.filter(_.name.value == o.service))
                                      }
                        service     <- services
                      } yield DbMapping(
-                       service   = service,
+                       service   = service.name,
+                       teams     = service.teamNames,
                        database  = database,
                        filterOut = filterOut
                      )
@@ -190,5 +210,5 @@ object MongoService {
   // filterOut is used to filter metrics later, when querying metrics endpoint for a db
   // we can get some results which are for other dbs eg. searching for db called
   // "service-one" will bring back dbs/collections belonging to "service-one-frontend"
-  final case class DbMapping(service: ServiceName, database: String, filterOut: Seq[String])
+  final case class DbMapping(service: ServiceName, database: String, filterOut: Seq[String], teams: Seq[String])
 }

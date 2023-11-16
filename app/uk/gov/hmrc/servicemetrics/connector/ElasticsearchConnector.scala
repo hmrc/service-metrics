@@ -50,29 +50,38 @@ class ElasticsearchConnector @Inject()(
                                                 env -> s"Basic ${new String(base64Encoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
                                               }
 
-  def getSlowQueries(environment: Environment, database: String)(implicit hc: HeaderCarrier): Future[Seq[MongoQueryLog]] =
-    getMongoDbLogs(environment, s"duration:>${elasticsearchConfig.longRunningQueryInMilliseconds} AND database: $database")
+  def getSlowQueries(environment: Environment, database: String, from: Instant, to: Instant)(implicit hc: HeaderCarrier): Future[Option[MongoQueryLog]] =
+    getMongoDbLogs(
+      environment,
+      s"duration:>${elasticsearchConfig.longRunningQueryInMilliseconds} AND NOT mongo_db:backup_mongodb",
+      database,
+      from,
+      to,
+    )
 
-  def getNonIndexedQueries(environment: Environment, database: String)(implicit hc: HeaderCarrier): Future[Seq[MongoQueryLog]] =
-    getMongoDbLogs(environment, s"scan: COLLSCAN AND NOT mongo_db: backup_mongodb AND database: $database")
+  def getNonIndexedQueries(environment: Environment, database: String, from: Instant, to: Instant)(implicit hc: HeaderCarrier): Future[Option[MongoQueryLog]] =
+    getMongoDbLogs(
+      environment,
+      "scan: COLLSCAN AND NOT mongo_db:backup_mongodb",
+      database,
+      from,
+      to,
+    )
 
-  private def getMongoDbLogs(environment: Environment, query: String)(implicit hc: HeaderCarrier): Future[Seq[MongoQueryLog]] = {
+  private def getMongoDbLogs(environment: Environment, query: String, database: String, from: Instant, to: Instant)(implicit hc: HeaderCarrier): Future[Option[MongoQueryLog]] = {
     val baseUrl = elasticsearchConfig.elasticSearchBaseUrl.replace("$env", environment.asString)
 
-    implicit val mmr: Reads[Seq[MongoQueryLog]] = MongoQueryLog.reads
-
-    val to   = Instant.now
-    val from = to.minusSeconds(elasticsearchConfig.nonPerformantQueriesIntervalInMinutes*60)
+    implicit val mmr: Reads[Seq[MongoCollectionNonPerfomantQuery]] = MongoCollectionNonPerfomantQuery.reads
 
     val body = s"""
     {
-      "size": 10000,
+      "size": 0,
       "query": {
         "bool": {
           "must": [
             {
               "query_string": {
-                "query": "type:mongodb AND $query"
+                "query": "type:mongodb AND $query  AND database:\\\"$database\\\""
               }
             }
           ],
@@ -87,6 +96,14 @@ class ElasticsearchConnector @Inject()(
               }
             }
           ]
+        }
+      },
+      "aggs": {
+        "collections": {
+          "terms": { "field": "collection.raw" },
+          "aggs": {
+            "avg_duration" : { "avg" : { "field" : "duration" } }
+          }
         }
       },
       "sort": [
@@ -105,33 +122,51 @@ class ElasticsearchConnector @Inject()(
       ))
       .withBody(body)
       .execute[JsValue]
-      .map(_.as[Seq[MongoQueryLog]])
+      .map(json =>
+        json.validate[Seq[MongoCollectionNonPerfomantQuery]]
+          .fold(error => {
+              logger.error(s"Error while parsing JSON $json\n\n$error")
+              Seq.empty
+            },
+            identity  
+          )
+      )
+      .map(nonPerformantQueries =>
+        Option.when(nonPerformantQueries.nonEmpty)(
+          MongoQueryLog(
+            since                 = from,
+            timestamp             = to,
+            nonPerformantQueries  = nonPerformantQueries,
+            database              = database,
+          )
+        )
+      )
   }
 
 }
 object ElasticsearchConnector {
-  case class MongoQueryLog(
-    timestamp : Instant,
-    collection: String,
-    database  : String,
-    mongoDb   : String,
-    operation : Option[String],
-    duration  : Int,
+  case class MongoCollectionNonPerfomantQuery(
+    collection : String,
+    occurrences: Int,
+    duration   : Int,
   )
 
-  object MongoQueryLog{
+  object MongoCollectionNonPerfomantQuery{
+    private implicit val readsLog: Reads[MongoCollectionNonPerfomantQuery] =
+      ( (__ \ "key").read[String]
+      ~ (__ \ "doc_count" ).read[Int]
+      ~ (__ \ "avg_duration" \ "value"  ).read[Double].map(_.toInt)
+      )(MongoCollectionNonPerfomantQuery.apply _)
 
-    private implicit val readsLog: Reads[MongoQueryLog] =
-      ( (__ \ "_source" \ "@timestamp").read[Instant]
-      ~ (__ \ "_source" \ "collection").read[String]
-      ~ (__ \ "_source" \ "database"  ).read[String]
-      ~ (__ \ "_source" \ "mongo_db"  ).read[String]
-      ~ (__ \ "_source" \ "operation" ).readNullable[String]
-      ~ (__ \ "_source" \ "duration"  ).read[Int]
-      )(MongoQueryLog.apply _)
-
-    val reads: Reads[Seq[MongoQueryLog]] =
-      (__ \ "hits" \ "hits").read[Seq[MongoQueryLog]]
+    val reads: Reads[Seq[MongoCollectionNonPerfomantQuery]] =
+      (__ \ "aggregations" \ "collections" \ "buckets").read[Seq[MongoCollectionNonPerfomantQuery]]
   }
+
+  case class MongoQueryLog(
+    since               : Instant,
+    timestamp           : Instant,
+    nonPerformantQueries: Seq[MongoCollectionNonPerfomantQuery],
+    database            : String,
+  )
 }
 

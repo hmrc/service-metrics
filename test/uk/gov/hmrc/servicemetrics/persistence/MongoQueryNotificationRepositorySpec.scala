@@ -51,6 +51,7 @@ class MongoQueryNotificationRepositorySpec
     |    notification-period = 1.days
     |    throttling-period   = 7.days
     |    notify-teams = false
+    |    notification-channel = "channel"
     |
     |    kibana {
     |      baseUrl = "http://logs.$${env}.local"
@@ -67,10 +68,11 @@ class MongoQueryNotificationRepositorySpec
   private def seed(env: Environment) = Seq(
     MongoQueryNotificationRepository.MongoQueryNotification(
       timestamp   = Instant.now,
-      collection  = "collection",
       service     = "service",
+      database    = "database",
       queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
       environment = env,
+      team        = "team"
     )
   )
 
@@ -79,19 +81,12 @@ class MongoQueryNotificationRepositorySpec
     "return true" when {
       "there are notifications for a service, collection, environment and query type" in {
         
-        val collection  = "collection"
-        val service     = "service"
+        val team        = "team"
         val environment = Environment.QA
-        val queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery
 
         repository.insertMany(seed(environment)).futureValue
 
-        repository.hasBeenNotified(
-            collection,
-            environment,
-            service,
-            queryType,
-          ).futureValue shouldBe true
+        repository.hasBeenNotified(team).futureValue shouldBe true
       }
     }
   }
