@@ -185,7 +185,7 @@ object MongoQueryLogHistoryRepository {
   
   object MongoQueryType {
     case object SlowQuery extends MongoQueryType       { val value: String = "Slow Running Query" }
-    case object NonIndexedQuery extends MongoQueryType { val value: String = "Non Indexed Collection Query" }
+    case object NonIndexedQuery extends MongoQueryType { val value: String = "Non-indexed Collection Query" }
 
     case class OtherQuery(val value: String) extends MongoQueryType
 

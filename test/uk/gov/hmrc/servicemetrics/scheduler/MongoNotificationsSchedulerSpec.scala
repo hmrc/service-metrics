@@ -47,8 +47,8 @@ class MongoNotificationsSchedulerSpec
 
 
   "notifyPerEnvironment" should {
-    "notify teams of non performant queries" when {
-      "there are non performant queries to be notified of and notifications are enabled" in new MongoNotificationsSchedulerFixture(
+    "notify teams of non-performant queries" when {
+      "there are non-performant queries to be notified of and notifications are enabled" in new MongoNotificationsSchedulerFixture(
         queries = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
           timestamp   = Instant.now,
           since       = Instant.now.minusSeconds(20),
@@ -81,7 +81,7 @@ class MongoNotificationsSchedulerSpec
       }
     }
     "do not notify teams of performant queries" when {
-      "there are no non performant queries" in new MongoNotificationsSchedulerFixture(){
+      "there are no non-performant queries" in new MongoNotificationsSchedulerFixture(){
         val env  = Environment.QA
         val from = Instant.now()
         val to   = from.plusSeconds(3600)
@@ -200,7 +200,7 @@ class MongoNotificationsSchedulerSpec
       |      baseUrl = "http://logs.$${env}.local"
       |      links  = {
       |        "Slow Running Query"           = "http://url"
-      |        "Non Indexed Collection Query" = "http://url"
+      |        "Non-indexed Collection Query" = "http://url"
       |      }
       |    }
       |  }

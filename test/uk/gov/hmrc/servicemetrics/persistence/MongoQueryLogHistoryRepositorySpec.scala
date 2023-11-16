@@ -55,7 +55,7 @@ class MongoQueryLogHistoryRepositorySpec
 
   "getAll" should {
     "return results" when {
-      "there are non performant queries for an environment" in {
+      "there are non-performant queries for an environment" in {
         val environment = Environment.QA
 
         repository.insertMany(seed(
@@ -75,7 +75,7 @@ class MongoQueryLogHistoryRepositorySpec
 
   "getQueryTypesByService" should {
     "return results" when {
-      "there are non performant queries for a service" in {
+      "there are non-performant queries for a service" in {
         val expectedResult = MongoQueryLogHistoryRepository.NonPerformantQueries(
           "service",
           Environment.QA,
