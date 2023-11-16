@@ -61,17 +61,17 @@ class MongoNotificationsScheduler  @Inject()(
     val to   = Instant.now
     val from = to.minus(slackNotifiactionsConfig.notificationPeriod.toHours, ChronoUnit.HOURS)
 
-    logger.info(s"Starting to notify teams of non performant mongo queries on ${envs.mkString(", ")}")
+    logger.info(s"Starting to notify teams of non-performant mongo queries on ${envs.mkString(", ")}")
     for {
       _ <- Future.traverse(envs)(env =>
         notifyPerEnvironment(env, from, to)
           .recoverWith {
             case scala.util.control.NonFatal(e) =>
-              logger.error(s"Failed to notify teams of non performant mongo queries on ${env.asString}", e)
+              logger.error(s"Failed to notify teams of non-performant mongo queries on ${env.asString}", e)
               Future.unit
           }
       )
-    } yield logger.info(s"Finished notifying of non performant mongo queries on ${envs.mkString(", ")}")
+    } yield logger.info(s"Finished notifying of non-performant mongo queries on ${envs.mkString(", ")}")
   }
 
   type MongoNotificationData = (String, String, String, MongoQueryType)
@@ -111,7 +111,7 @@ class MongoNotificationsScheduler  @Inject()(
                                       channelLookup = channelLookup,
                                       text          = "There are non-performant queries running against MongoDB",
                                       emoji         = ":see_no_evil:",
-                                      displayName   = s"Non performant queries",
+                                      displayName   = s"Non-performant queries",
                                       blocks        = blocks
                                     )
 
@@ -134,7 +134,7 @@ class MongoNotificationsScheduler  @Inject()(
                                           acc
                                       }
                                   } else {
-                                    logger.info(s"Detected non performant queries for team '$team'")
+                                    logger.info(s"Detected non-performant queries for team '$team'")
                                     Future.successful(acc)
                                   }
                                 }

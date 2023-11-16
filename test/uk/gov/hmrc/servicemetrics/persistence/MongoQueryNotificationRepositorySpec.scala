@@ -57,7 +57,7 @@ class MongoQueryNotificationRepositorySpec
     |      baseUrl = "http://logs.$${env}.local"
     |      links  = {
     |        "Slow Running Query"           = "url"
-    |        "Non Indexed Collection Query" = "url"
+    |        "Non-Indexed Collection Query" = "url"
     |      }
     |    }
     |  }
