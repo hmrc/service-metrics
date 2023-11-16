@@ -25,7 +25,7 @@ import uk.gov.hmrc.servicemetrics.config.{SchedulerConfigs}
 import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 import uk.gov.hmrc.servicemetrics.connector._
-import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository.{MongoQueryLogHistory, MongoQueryType, NonPerformantQueryDetails}
+import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository.{MongoQueryLogHistory, MongoQueryType}
 import uk.gov.hmrc.servicemetrics.persistence.MongoQueryNotificationRepository.MongoQueryNotification
 import uk.gov.hmrc.servicemetrics.service.MongoService
 
@@ -100,25 +100,18 @@ class MongoNotificationsScheduler  @Inject()(
                                         GithubTeam(team)
                                       else
                                         SlackChannels(Seq(slackNotifiactionsConfig.notificationChannel))
-                                    val blocks = notifications.flatMap{nd =>
-                                      nd.details.flatMap { case NonPerformantQueryDetails(collection, _, _) =>
-                                        val message = s"""
-                                                          |The service *${nd.service}* is running non performant queries against the collection *${nd.database}.$collection* in *${env.asString}*
-                                                          |Please click on the following Kibana links for more details:
-                                                        """.stripMargin
-                                        SlackNotificationRequest.toBlocks(
-                                          message,
-                                          Some(
-                                            new java.net.URL(kibanaLink(nd.queryType, nd.database, env)) -> nd.queryType.value
+                                    val initialMessage = s"""Hi *$team*, we have seen the following non-performant queries""".stripMargin
+                                    val messages = notifications.groupBy(_.queryType).foldLeft(Seq(initialMessage)){ case (acc, (qt, ns)) =>
+                                        (acc :+ qt.value) ++ ns.map(n =>
+                                            s"• service *${n.service}* in *${n.environment.asString}* - <${kibanaLink(qt, n.database, n.environment)}|see kibana>"
                                           )
-                                        )
-                                      }
                                     }
+                                    val blocks = SlackNotificationRequest.toBlocks(messages)
                                     val request = SlackNotificationRequest(
                                       channelLookup = channelLookup,
                                       text          = "There are non-performant queries running against MongoDB",
                                       emoji         = ":see_no_evil:",
-                                      displayName   = s"Non performant queries [$team]",
+                                      displayName   = s"Non performant queries",
                                       blocks        = blocks
                                     )
 

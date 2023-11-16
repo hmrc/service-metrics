@@ -104,22 +104,40 @@ final case class SlackNotificationRequest(
   displayName  : String,
   emoji        : String,
   text         : String,
-  blocks       : Seq[JsObject]
+  blocks       : Seq[JsValue]
 )
 
 object SlackNotificationRequest {
-  def toBlocks(message: String, referenceUrl: Option[(java.net.URL, String)]): Seq[JsObject] =
-    Json.obj(
-      "type" -> JsString("section")
-    , "text" -> Json.obj("type" -> JsString("mrkdwn"), "text" -> JsString(message))
-    ) :: (referenceUrl match {
-      case Some((url, title)) =>
-        Json.obj("type" -> JsString("divider"))                                      ::
-        Json.obj(
-            "type" -> JsString("section")
-          , "text" -> Json.obj("type" -> JsString("mrkdwn"), "text" -> JsString(s"<$url|$title>"))
-        ) ::
-        Nil
-      case None               => Nil
-    })
+  // def toBlocks(message: String, referenceUrl: Option[(java.net.URL, String)]): Seq[JsValue] =
+  //   Json.parse(s"""{
+  //     "type": "section",
+  //     "text": {
+  //       "type": "mrkdwn",
+  //       "text": "${message.replace("\n","\\n")}"
+  //     }
+  //   }"""
+  //   ) :: (referenceUrl match {
+  //     case Some((url, title)) =>
+  //       Json.parse("""{"type": "divider"}"""") ::
+  //       Json.parse(
+  //           s"""{
+  //           | "type": "section",
+  //           | "text": {
+  //           |    "type": "mrkdwn",
+  //           |    "text": "<$url|$title>"
+  //           |  }
+  //           |}
+  //         """.stripMargin
+  //       ) ::
+  //       Nil
+  //     case None               => Nil
+  //   })
+  def toBlocks(messages: Seq[String]): Seq[JsValue] =
+    messages.map(message => Json.parse(s"""{
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "${message.replace("\n","\\n")}"
+        }
+      }"""))
 }
