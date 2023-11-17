@@ -37,6 +37,7 @@ import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.Future
+import java.time.LocalDateTime
 
 class MongoNotificationsSchedulerSpec
   extends AnyWordSpec
@@ -159,6 +160,18 @@ class MongoNotificationsSchedulerSpec
         verify(mockSlackNotificationsConnector, times(0)).sendMessage(any[SlackNotificationRequest])
         
       }
+    }
+
+    "runs only during working hours" in new MongoNotificationsSchedulerFixture {
+      val friday9Oclock = Some(LocalDateTime.of(2023, 11, 17, 9, 0, 0))
+      val saturday9Oclock = Some(LocalDateTime.of(2023, 11, 18, 9, 0, 0))
+      val friday8Oclock = Some(LocalDateTime.of(2023, 11, 17, 8, 0, 0))
+      val friday18Oclock = Some(LocalDateTime.of(2023, 11, 17, 18, 0, 0))
+    
+      scheduler.duringWorkingHours(friday9Oclock) shouldBe true
+      scheduler.duringWorkingHours(saturday9Oclock) shouldBe false
+      scheduler.duringWorkingHours(friday8Oclock) shouldBe false
+      scheduler.duringWorkingHours(friday18Oclock) shouldBe false
     }
   }
 
