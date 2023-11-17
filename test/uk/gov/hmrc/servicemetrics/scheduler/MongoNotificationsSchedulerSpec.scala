@@ -20,9 +20,11 @@ import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import org.mockito.MockitoSugar
 import org.mockito.ArgumentMatchers._
+import org.scalacheck.Gen
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.mongo.lock.MongoLockRepository
@@ -33,17 +35,19 @@ import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.persistence.{MongoQueryLogHistoryRepository, MongoQueryNotificationRepository}
 import uk.gov.hmrc.servicemetrics.service.MongoService
 
-import java.time.Instant
+import java.time._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.Future
+
 
 class MongoNotificationsSchedulerSpec
   extends AnyWordSpec
   with Matchers
   with ScalaFutures
   with MockitoSugar 
-  with IntegrationPatience {
+  with IntegrationPatience
+  with ScalaCheckPropertyChecks {
 
 
   "notifyPerEnvironment" should {
@@ -159,6 +163,35 @@ class MongoNotificationsSchedulerSpec
         verify(mockSlackNotificationsConnector, times(0)).sendMessage(any[SlackNotificationRequest])
         
       }
+    }
+
+    "runs only during working hours" in new MongoNotificationsSchedulerFixture {
+      val yearDays = for (yearDay <- Gen.choose(1, 365)) yield yearDay
+      val years = for (year <- Gen.choose(2023, 2030)) yield year
+      val hours = for (hour <- Gen.choose(0, 23)) yield hour
+      val minutes = for (minute <- Gen.choose(0, 59)) yield minute
+
+
+      forAll(yearDays, years, hours, minutes) { (yearDay: Int, year: Int, hour: Int, minute: Int) =>
+
+        whenever((LocalDate.of(year, 1, 1).isLeapYear && yearDay < 366) || !LocalDate.of(year, 1, 1).isLeapYear) {
+          val date = LocalDate.ofYearDay(year, yearDay)
+          val time = LocalTime.of(hour, minute, 0)
+
+          val dateTime = LocalDateTime.of(date, time)
+
+          if (date.getDayOfWeek != DayOfWeek.SATURDAY
+            && date.getDayOfWeek != DayOfWeek.SUNDAY
+            && time.getHour <= 17
+            && time.getHour >= 9
+          ) {
+            scheduler.duringWorkingHours(Some(dateTime)) shouldBe true
+          } else {
+            scheduler.duringWorkingHours(Some(dateTime)) shouldBe false
+          }
+        }
+      }
+
     }
   }
 

@@ -19,5 +19,6 @@ object AppDependencies {
     "uk.gov.hmrc.mongo"       %% "hmrc-mongo-test-play-28"    % hmrcMongoVersion            % Test,
     "org.mockito"             %  "mockito-core"               % "3.7.7"                     % Test,
     "org.mockito"             %% "mockito-scala-scalatest"    % "1.16.23"                   % Test,
+    "org.scalatestplus"       %% "scalacheck-1-14"            % "3.2.2.0"                   % Test,
   )
 }

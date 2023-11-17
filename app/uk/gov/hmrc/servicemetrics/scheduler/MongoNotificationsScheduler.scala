@@ -30,7 +30,7 @@ import uk.gov.hmrc.servicemetrics.persistence.MongoQueryNotificationRepository.M
 import uk.gov.hmrc.servicemetrics.service.MongoService
 
 import java.net.URLEncoder
-import java.time.Instant
+import java.time.{DayOfWeek, Instant, LocalDateTime}
 import java.time.temporal.ChronoUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
@@ -61,17 +61,28 @@ class MongoNotificationsScheduler  @Inject()(
     val to   = Instant.now
     val from = to.minus(slackNotifiactionsConfig.notificationPeriod.toHours, ChronoUnit.HOURS)
 
-    logger.info(s"Starting to notify teams of non-performant mongo queries on ${envs.mkString(", ")}")
-    for {
-      _ <- Future.traverse(envs)(env =>
-        notifyPerEnvironment(env, from, to)
-          .recoverWith {
-            case scala.util.control.NonFatal(e) =>
-              logger.error(s"Failed to notify teams of non-performant mongo queries on ${env.asString}", e)
-              Future.unit
-          }
-      )
-    } yield logger.info(s"Finished notifying of non-performant mongo queries on ${envs.mkString(", ")}")
+    if (duringWorkingHours()) {
+      logger.info(s"Starting to notify teams of non-performant mongo queries on ${envs.mkString(", ")}")
+      for {
+        _ <- Future.traverse(envs)(env =>
+          notifyPerEnvironment(env, from, to)
+            .recoverWith {
+              case scala.util.control.NonFatal(e) =>
+                logger.error(s"Failed to notify teams of non-performant mongo queries on ${env.asString}", e)
+                Future.unit
+            }
+        )
+      } yield logger.info(s"Finished notifying of non-performant mongo queries on ${envs.mkString(", ")}")
+    } else {
+      logger.info("Notifications are disabled during non-working hours")
+      Future.unit
+    }
+  }
+
+  private[scheduler] def duringWorkingHours(overrideNow: Option[LocalDateTime] = None): Boolean = {
+    val now = overrideNow.getOrElse(LocalDateTime.now())
+    !Seq(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY).contains(now.getDayOfWeek()) &&
+      (9 to 17).contains(now.getHour())
   }
 
   type MongoNotificationData = (String, String, String, MongoQueryType)
