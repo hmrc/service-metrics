@@ -42,7 +42,7 @@ class MongoNotificationsScheduler  @Inject()(
 , lockRepository             : MongoLockRepository
 , mongoService               : MongoService
 , slackNotificationsConnector: SlackNotificationsConnector
-, slackNotifiactionsConfig   : SlackNotificationsConfig
+, slackNotificationsConfig   : SlackNotificationsConfig
 )(implicit
   actorSystem          : ActorSystem
 , applicationLifecycle : ApplicationLifecycle
@@ -59,7 +59,7 @@ class MongoNotificationsScheduler  @Inject()(
     val envs: List[Environment] =
       Environment.values.filterNot(_.equals(Environment.Integration))
     val to   = Instant.now
-    val from = to.minus(slackNotifiactionsConfig.notificationPeriod.toHours, ChronoUnit.HOURS)
+    val from = to.minus(slackNotificationsConfig.notificationPeriod.toHours, ChronoUnit.HOURS)
 
     if (duringWorkingHours()) {
       logger.info(s"Starting to notify teams of non-performant mongo queries on ${envs.mkString(", ")}")
@@ -106,48 +106,14 @@ class MongoNotificationsScheduler  @Inject()(
                                         )
                                     }
       mongoQueryNotifications <- notificationData.foldLeftM[Future, Seq[MongoQueryNotification]](Seq.empty) { case (acc, (team, notifications)) => 
-                                  if (slackNotifiactionsConfig.enabled) {
-                                    val channelLookup = if (slackNotifiactionsConfig.notifyTeams)
-                                        GithubTeam(team)
-                                      else
-                                        SlackChannels(Seq(slackNotifiactionsConfig.notificationChannel))
-                                    val initialMessage = s"""Hi *$team*, we have seen the following non-performant queries""".stripMargin
-                                    val messages = notifications.groupBy(_.queryType).foldLeft(Seq(initialMessage)){ case (acc, (qt, ns)) =>
-                                        (acc :+ qt.value) :+ ns.map(n =>
-                                            s"• service *${n.service}* in *${n.environment.asString}* - <${kibanaLink(qt, n.database, n.environment)}|see kibana>"
-                                          ).distinct.mkString("\n")
-                                    }
-                                    val blocks = SlackNotificationRequest.toBlocks(messages)
-                                    val request = SlackNotificationRequest(
-                                      channelLookup = channelLookup,
-                                      text          = "There are non-performant queries running against MongoDB",
-                                      emoji         = ":see_no_evil:",
-                                      displayName   = s"Non-performant queries",
-                                      blocks        = blocks
-                                    )
-
-                                    slackNotificationsConnector.sendMessage(request)
-                                      .collect {
-                                        case response if response.errors.isEmpty => 
-                                          logger.info(s"Creating notification to save $team $notifications")
-                                          notifications.map(nd =>
-                                            MongoQueryNotification(
-                                              service     = nd.service,
-                                              database    = nd.database,
-                                              environment = env,
-                                              queryType   = nd.queryType,
-                                              timestamp   = Instant.now(),
-                                              team        = team
-                                            )
-                                           ) ++ acc
-                                        case response => 
-                                          logger.error(s"Errors occurred when sending a slack notification ${response.errors}")
-                                          acc
-                                      }
+                                  if (slackNotificationsConfig.notifyTeams || slackNotificationsConfig.notificationChannels.nonEmpty) {
+                                    val channelLookups = Seq(SlackChannels(slackNotificationsConfig.notificationChannels)) ++ Option.when(slackNotificationsConfig.notifyTeams)(GithubTeam(team))
+                                    channelLookups.foldLeftM[Future, Seq[MongoQueryNotification]](acc) { case (a, cl) => notifyChannel(cl, notifications, team, env).map(_ ++ a)}
                                   } else {
                                     logger.info(s"Detected non-performant queries for team '$team'")
                                     Future.successful(acc)
                                   }
+                                    
                                 }
       _                       <- if (mongoQueryNotifications.nonEmpty)
                                   mongoService.flagAsNotified(mongoQueryNotifications)
@@ -155,12 +121,53 @@ class MongoNotificationsScheduler  @Inject()(
                                   Future.unit
     } yield ()
 
+  private def notifyChannel(
+    channelLookup: ChannelLookup,
+    notifications: Seq[MongoQueryLogHistory],
+    team         : String,
+    env          : Environment,
+  ): Future[Seq[MongoQueryNotification]] = {
+    val initialMessage = s"""Hi *$team*, we have seen the following non-performant queries""".stripMargin
+    val messages = notifications.groupBy(_.queryType).foldLeft(Seq(initialMessage)){ case (acc, (qt, ns)) =>
+        (acc :+ qt.value) :+ ns.map(n =>
+            s"• service *${n.service}* in *${n.environment.asString}* - <${kibanaLink(qt, n.database, n.environment)}|see kibana>"
+          ).distinct.mkString("\n")
+    }
+    val blocks = SlackNotificationRequest.toBlocks(messages)
+    val request = SlackNotificationRequest(
+      channelLookup = channelLookup,
+      text          = "There are non-performant queries running against MongoDB",
+      emoji         = ":see_no_evil:",
+      displayName   = s"Non-performant queries",
+      blocks        = blocks
+    )
+
+    slackNotificationsConnector.sendMessage(request)
+      .collect {
+        case response if response.errors.isEmpty => 
+          logger.info(s"Creating notification to save $team $notifications")
+          notifications.map(nd =>
+            MongoQueryNotification(
+              service     = nd.service,
+              database    = nd.database,
+              environment = env,
+              queryType   = nd.queryType,
+              timestamp   = Instant.now(),
+              team        = team
+            )
+            )
+        case response => 
+          logger.error(s"Errors occurred when sending a slack notification ${response.errors}")
+          Seq.empty
+      }
+  }
+
   private def kibanaLink(
     queryType  : MongoQueryType,
     service    : String,
     environment: Environment
   ): String =
-    slackNotifiactionsConfig.kibanaLinks(queryType.value)
+    slackNotificationsConfig.kibanaLinks(queryType.value)
       .replace(s"$${env}", URLEncoder.encode(environment.asString, "UTF-8"))
       .replace(s"$${service}", URLEncoder.encode(service, "UTF-8"))
 }
