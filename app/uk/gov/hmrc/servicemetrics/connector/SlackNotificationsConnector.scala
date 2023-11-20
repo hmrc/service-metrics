@@ -85,8 +85,8 @@ final case class SlackNotificationResponse(
 sealed trait ChannelLookup { def by: String }
 
 final case class GithubTeam(
-  repositoryName: String,
-  by            : String = "github-team"
+  teamName: String,
+  by      : String = "github-team"
 ) extends ChannelLookup
 
 final case class OwningTeams(
