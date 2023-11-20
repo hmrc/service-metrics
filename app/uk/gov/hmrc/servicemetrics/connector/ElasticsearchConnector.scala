@@ -81,7 +81,7 @@ class ElasticsearchConnector @Inject()(
           "must": [
             {
               "query_string": {
-                "query": "type:mongodb AND $query  AND database:\\\"$database\\\""
+                "query": "type:mongodb AND $query AND database.raw:\\\"$database\\\""
               }
             }
           ],
