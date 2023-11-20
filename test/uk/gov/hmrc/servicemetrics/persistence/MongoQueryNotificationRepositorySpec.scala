@@ -51,7 +51,7 @@ class MongoQueryNotificationRepositorySpec
     |    notification-period = 1.days
     |    throttling-period   = 7.days
     |    notify-teams = false
-    |    notification-channel = "channel"
+    |    notification-channels = ["channel"]
     |
     |    kibana {
     |      baseUrl = "http://logs.$${env}.local"

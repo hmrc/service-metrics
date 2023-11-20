@@ -81,7 +81,7 @@ class MongoNotificationsSchedulerSpec
         verify(mockMongoService, times(1)).getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
         verify(mockMongoService, times(1)).hasBeenNotified(any[String])
         verify(mockMongoService, times(1)).flagAsNotified(any[Seq[MongoQueryNotificationRepository.MongoQueryNotification]])
-        verify(mockSlackNotificationsConnector, times(1)).sendMessage(any[SlackNotificationRequest])
+        verify(mockSlackNotificationsConnector, times(2)).sendMessage(any[SlackNotificationRequest])
       }
     }
     "do not notify teams of performant queries" when {
@@ -131,8 +131,10 @@ class MongoNotificationsSchedulerSpec
         verify(mockMongoService, times(1)).hasBeenNotified(any[String])
         verify(mockSlackNotificationsConnector, times(0)).sendMessage(any[SlackNotificationRequest])
       }
-      "notifications have been disabled" in new MongoNotificationsSchedulerFixture(
+      "there is no notification channels and not notifying to teams" in new MongoNotificationsSchedulerFixture(
         areNotificationEnabled = false,
+        notifyTeams            = false,
+        notificationChannels   = Seq.empty,
         queries = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
           timestamp   = Instant.now,
           since       = Instant.now.minusSeconds(20),
@@ -198,7 +200,9 @@ class MongoNotificationsSchedulerSpec
   abstract class MongoNotificationsSchedulerFixture(
     queries               : Map[String, Seq[MongoQueryLogHistoryRepository.MongoQueryLogHistory]] = Map.empty,
     hasBeenNotified       : Boolean                                                  = false,
-    areNotificationEnabled: Boolean                                                  = true
+    areNotificationEnabled: Boolean                                                  = true,
+    notifyTeams           : Boolean                                                  = true,
+    notificationChannels  : Seq[String]                                              = Seq("channel"),
   ) extends MockitoSugar {
     implicit val system                 = ActorSystem()
     implicit val applicationLifeCyble   = mock[ApplicationLifecycle]
@@ -223,11 +227,10 @@ class MongoNotificationsSchedulerSpec
       |alerts {
       |  slack {
       |    auth-token = token
-      |    enabled = $areNotificationEnabled
       |    notification-period = 1.days
       |    throttling-period   = 7.days
-      |    notify-teams = false
-      |    notification-channel = "channel"
+      |    notify-teams = $notifyTeams
+      |    notification-channels = [${notificationChannels.mkString(",")}]
       |
       |    kibana {
       |      baseUrl = "http://logs.$${env}.local"
@@ -252,7 +255,7 @@ class MongoNotificationsSchedulerSpec
       lockRepository              = mockMongoLockRepository,
       mongoService                = mockMongoService,
       slackNotificationsConnector = mockSlackNotificationsConnector,
-      slackNotifiactionsConfig    = slackNotificationsConfig,
+      slackNotificationsConfig    = slackNotificationsConfig,
     )
 
     when(mockMongoService.getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant]))
