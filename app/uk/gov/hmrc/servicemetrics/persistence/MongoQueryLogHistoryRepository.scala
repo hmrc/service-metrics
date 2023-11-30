@@ -208,7 +208,7 @@ object MongoQueryLogHistoryRepository {
   )
 
   object NonPerformantQueries{
-    private implicit val mqtFormat = MongoQueryType.format
+    private implicit val mqtFormat: Format[MongoQueryType] = MongoQueryType.format
     val format: Format[NonPerformantQueries] =
       ( (__ \ "service"    ).format[String]
       ~ (__ \ "environment").format[Environment](Environment.format)

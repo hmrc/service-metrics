@@ -16,7 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.scheduler
 
-import akka.actor.ActorSystem
+import org.apache.pekko.actor.ActorSystem
 import cats.implicits._
 import play.api.Logger
 import play.api.inject.ApplicationLifecycle
