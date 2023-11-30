@@ -107,7 +107,9 @@ class MongoNotificationsScheduler  @Inject()(
                                     }
       mongoQueryNotifications <- notificationData.foldLeftM[Future, Seq[MongoQueryNotification]](Seq.empty) { case (acc, (team, notifications)) => 
                                   if (slackNotificationsConfig.notifyTeams || slackNotificationsConfig.notificationChannels.nonEmpty) {
-                                    val channelLookups = Seq(SlackChannels(slackNotificationsConfig.notificationChannels)) ++ Option.when(slackNotificationsConfig.notifyTeams)(GithubTeam(team))
+                                    val notificationChannelsLookup = Option.when(slackNotificationsConfig.notificationChannels.nonEmpty)(SlackChannels(slackNotificationsConfig.notificationChannels))
+                                    val teamChannelLookup          = Option.when(slackNotificationsConfig.notifyTeams)(GithubTeam(team))
+                                    val channelLookups             = (notificationChannelsLookup ++ teamChannelLookup).toList
                                     channelLookups.foldLeftM[Future, Seq[MongoQueryNotification]](acc) { case (a, cl) => notifyChannel(cl, notifications, team, env).map(_ ++ a)}
                                   } else {
                                     logger.info(s"Detected non-performant queries for team '$team'")
