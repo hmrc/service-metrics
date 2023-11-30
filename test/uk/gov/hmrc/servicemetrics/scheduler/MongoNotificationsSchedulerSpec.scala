@@ -16,7 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.scheduler
 
-import akka.actor.ActorSystem
+import org.apache.pekko.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import org.mockito.MockitoSugar
 import org.mockito.ArgumentMatchers._
@@ -238,14 +238,15 @@ class MongoNotificationsSchedulerSpec
     notifyTeams           : Boolean                                                  = true,
     notificationChannels  : Seq[String]                                              = Seq("channel"),
   ) extends MockitoSugar {
-    implicit val system                 = ActorSystem()
-    implicit val applicationLifeCyble   = mock[ApplicationLifecycle]
-    val schedulerConfig                 = SchedulerConfig(
-      "foo",
-      true,
-      1.second,
-      1.second
-    )
+    implicit val system: ActorSystem = ActorSystem()
+    implicit val applicationLifeCycle: ApplicationLifecycle = mock[ApplicationLifecycle]
+    val schedulerConfig =
+      SchedulerConfig(
+        "foo",
+        true,
+        1.second,
+        1.second
+      )
     val config                          = Configuration(ConfigFactory.parseString(s"""
       |mongo-metrics-scheduler {
       |  enabled      = true
