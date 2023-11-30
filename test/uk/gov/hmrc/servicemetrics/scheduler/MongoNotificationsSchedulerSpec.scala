@@ -165,6 +165,40 @@ class MongoNotificationsSchedulerSpec
         verify(mockSlackNotificationsConnector, times(0)).sendMessage(any[SlackNotificationRequest])
         
       }
+      "there is no notification channels" in new MongoNotificationsSchedulerFixture(
+        areNotificationEnabled = true,
+        notifyTeams            = true,
+        notificationChannels   = Seq.empty,
+        queries = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
+          timestamp   = Instant.now,
+          since       = Instant.now.minusSeconds(20),
+          database    = "database",
+          details     = Seq(MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
+            collection  = "collection",
+            duration    = 3001,
+            occurrences = 1
+          )),
+          service     = "service",
+          queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
+          environment = Environment.QA,
+          teams       = Seq("team")
+        )))
+      ){
+        val env  = Environment.QA
+        val from = Instant.now()
+        val to   = from.plusSeconds(3600)
+
+        scheduler.notifyPerEnvironment(
+          env,
+          from,
+          to  
+        ).futureValue
+
+        verify(mockMongoService, times(1)).getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
+        verify(mockMongoService, times(1)).hasBeenNotified(any[String])
+        verify(mockSlackNotificationsConnector, times(1)).sendMessage(any[SlackNotificationRequest])
+        
+      }
     }
 
     "runs only during working hours" in new MongoNotificationsSchedulerFixture {
