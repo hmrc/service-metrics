@@ -81,7 +81,7 @@ class ElasticsearchConnector @Inject()(
           "must": [
             {
               "query_string": {
-                "query": "type:mongodb AND AND NOT mongo_db.raw:(\\\"backup_mongo\\\"|\\\"backup_protected-mongo\\\"|\\\"backup_protected-auth-mongo\\\"|\\\"backup_protected-centralised-auth-mongo\\\"|\\\"backup_protected-rate-mongo\\\"|\\\"backup_public-mongo\\\") AND $query AND  database.raw:\\\"$database\\\""
+                "query": "type:mongodb AND NOT mongo_db.raw:(\\\"backup_mongo\\\"|\\\"backup_protected-mongo\\\"|\\\"backup_protected-auth-mongo\\\"|\\\"backup_protected-centralised-auth-mongo\\\"|\\\"backup_protected-rate-mongo\\\"|\\\"backup_public-mongo\\\") AND $query AND  database.raw:\\\"$database\\\""
               }
             }
           ],
