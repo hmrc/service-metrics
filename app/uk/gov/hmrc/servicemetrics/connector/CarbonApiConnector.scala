@@ -36,7 +36,6 @@ class CarbonApiConnector @Inject()(
 )(implicit
   ec: ExecutionContext
 ) {
-
   private val carbonApiBaseUrl: String = servicesConfig.baseUrl("carbon-api")
 
   def getCollectionSizes(environment: Environment, database: String)(implicit hc: HeaderCarrier): Future[Seq[MongoCollectionSizeMetric]] = {
@@ -54,7 +53,11 @@ class CarbonApiConnector @Inject()(
 
 }
 object CarbonApiConnector {
-  case class MongoCollectionSizeMetric(metricLabel: String, sizeBytes: BigDecimal, timestamp: Instant)
+  case class MongoCollectionSizeMetric(
+    metricLabel: String,
+    sizeBytes  : BigDecimal,
+    timestamp  : Instant
+  )
 
   object MongoCollectionSizeMetric {
     val reads: Reads[MongoCollectionSizeMetric] =
@@ -64,4 +67,3 @@ object CarbonApiConnector {
       )(apply _)
   }
 }
-

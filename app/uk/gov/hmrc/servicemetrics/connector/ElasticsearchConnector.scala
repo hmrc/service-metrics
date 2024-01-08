@@ -39,16 +39,14 @@ class ElasticsearchConnector @Inject()(
 
   import ElasticsearchConnector._
 
-  private val base64Encoder               = Base64.getEncoder()
-  private val base64Decoder               = Base64.getDecoder()
-  private val basicAuthenticationCredentials = elasticsearchConfig.environmentPasswords
-                                              .map{ case (env, password) =>
-                                                val decodedPassword = scala.util.Try(new String(base64Decoder.decode(password)).trim()).getOrElse {
-                                                  logger.info(s"Couldn't decode password for env ${env.asString}")
-                                                  ""
-                                                }
-                                                env -> s"Basic ${new String(base64Encoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
-                                              }
+  private val basicAuthenticationCredentials =
+    elasticsearchConfig.environmentPasswords
+      .map { case (env, password) =>
+        val decodedPassword =
+          scala.util.Try(new String(Base64.getDecoder.decode(password)).trim())
+            .getOrElse { logger.info(s"Couldn't decode password for env ${env.asString}"); "" }
+        env -> s"Basic ${new String(Base64.getEncoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
+      }
 
   def getSlowQueries(environment: Environment, database: String, from: Instant, to: Instant)(implicit hc: HeaderCarrier): Future[Option[MongoQueryLog]] =
     getMongoDbLogs(
@@ -128,7 +126,7 @@ class ElasticsearchConnector @Inject()(
               logger.error(s"Error while parsing JSON $json\n\n$error")
               Seq.empty
             },
-            identity  
+            identity
           )
       )
       .map(nonPerformantQueries =>
@@ -169,4 +167,3 @@ object ElasticsearchConnector {
     database            : String,
   )
 }
-

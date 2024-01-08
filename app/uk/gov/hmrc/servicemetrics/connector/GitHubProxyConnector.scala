@@ -31,8 +31,6 @@ class GitHubProxyConnector @Inject()(
   httpClientV2  : HttpClientV2
 , servicesConfig: ServicesConfig
 )(implicit ec: ExecutionContext) {
-
-
   private val gitHubProxyBaseURL: String = servicesConfig.baseUrl("platops-github-proxy")
 
   def getMongoOverrides(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[DbOverride]] =

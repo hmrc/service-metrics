@@ -29,10 +29,10 @@ import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class SlackNotificationsConnector @Inject()(
-    httpClientV2               : HttpClientV2,
-    servicesConfig             : ServicesConfig,
-    slackNotifiactionsConfig   : SlackNotificationsConfig
-  )(implicit val ec: ExecutionContext) {
+  httpClientV2               : HttpClientV2,
+  servicesConfig             : ServicesConfig,
+  slackNotifiactionsConfig   : SlackNotificationsConfig
+)(implicit val ec: ExecutionContext) {
 
   private val url: String = servicesConfig.baseUrl("slack-notifications")
 

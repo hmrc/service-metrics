@@ -81,13 +81,13 @@ object MongoQueryNotificationRepository {
 
   object MongoQueryNotification {
     private implicit val instantFormat: Format[Instant] = MongoJavatimeFormats.instantFormat
-    val format: Format[MongoQueryNotification] = 
-      (  (__ \ "service"    ).format[String]
-      ~  (__ \ "database"   ).format[String]
-      ~  (__ \ "environment").format[Environment](Environment.format)
-      ~  (__ \ "queryType"  ).format[MongoQueryType](MongoQueryType.format)
-      ~  (__ \ "timestamp"  ).format[Instant]
-      ~  (__ \ "team"       ).format[String]
+    val format: Format[MongoQueryNotification] =
+      ( (__ \ "service"    ).format[String]
+      ~ (__ \ "database"   ).format[String]
+      ~ (__ \ "environment").format[Environment](Environment.format)
+      ~ (__ \ "queryType"  ).format[MongoQueryType](MongoQueryType.format)
+      ~ (__ \ "timestamp"  ).format[Instant]
+      ~ (__ \ "team"       ).format[String]
       )(MongoQueryNotification.apply _, unlift(MongoQueryNotification.unapply _))
   }
 }

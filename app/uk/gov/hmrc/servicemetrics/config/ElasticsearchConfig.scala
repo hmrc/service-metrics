@@ -25,12 +25,20 @@ import javax.inject.{Inject, Singleton}
 class ElasticsearchConfig @Inject() (
   servicesConfig: ServicesConfig
 ) {
+  val elasticSearchBaseUrl: String =
+    servicesConfig.baseUrl("elasticsearch")
 
-  lazy val elasticSearchBaseUrl                 : String                   = servicesConfig.baseUrl("elasticsearch")
-  lazy val username                             : String                   = servicesConfig.getString("microservice.services.elasticsearch.username")
-  lazy val environmentPasswords                 : Map[Environment, String] = Environment.values.map(env =>
-                                                                              env -> servicesConfig.getString(s"microservice.services.elasticsearch.${env.asString}.password")
-                                                                             ).toMap
-  lazy val mongoDbIndex                         : String                   = servicesConfig.getString("microservice.services.elasticsearch.mongodb-index")
-  lazy val longRunningQueryInMilliseconds       : Int                      = servicesConfig.getInt("microservice.services.elasticsearch.long-running-query-in-milliseconds")
+  val username: String =
+    servicesConfig.getString("microservice.services.elasticsearch.username")
+
+  val environmentPasswords: Map[Environment, String] =
+    Environment.values.map(env =>
+      env -> servicesConfig.getString(s"microservice.services.elasticsearch.${env.asString}.password")
+    ).toMap
+
+  val mongoDbIndex: String =
+    servicesConfig.getString("microservice.services.elasticsearch.mongodb-index")
+
+  val longRunningQueryInMilliseconds: Int =
+    servicesConfig.getInt("microservice.services.elasticsearch.long-running-query-in-milliseconds")
 }

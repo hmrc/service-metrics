@@ -29,9 +29,9 @@ import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class TeamsAndRepositoriesConnector @Inject() (
-                                                httpClientV2  : HttpClientV2,
-                                                servicesConfig: ServicesConfig
-                                              )(implicit val ec: ExecutionContext)  {
+  httpClientV2  : HttpClientV2,
+  servicesConfig: ServicesConfig
+)(implicit val ec: ExecutionContext) {
 
   private val teamsAndRepositoriesBaseUrl: String =
     servicesConfig.baseUrl("teams-and-repositories")
@@ -42,21 +42,20 @@ class TeamsAndRepositoriesConnector @Inject() (
       .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories")
       .execute[Seq[Service]]
   }
-
 }
 
 object TeamsAndRepositoriesConnector {
   case class ServiceName(value: String) extends AnyVal
 
   case class Service(
-    name: ServiceName,
+    name     : ServiceName,
     teamNames: Seq[String]
   )
 
   object Service {
     val reads: Reads[Service] =
       ( (__ \ "name"     ).read[String].map(ServiceName(_))
-      ~ (__ \ "teamNames"  ).read[Seq[String]]
+      ~ (__ \ "teamNames").read[Seq[String]]
       )(Service.apply _)
   }
 }

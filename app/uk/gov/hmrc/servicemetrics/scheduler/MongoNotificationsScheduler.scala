@@ -95,7 +95,7 @@ class MongoNotificationsScheduler  @Inject()(
     for {
       nonPerformantQueries    <- mongoService.getAllQueriesGroupedByTeam(env, from, to)
       notificationData        <- nonPerformantQueries.toSeq.foldLeftM[Future, Seq[(String, Seq[MongoQueryLogHistory])]](Seq.empty){
-                                  case (acc, (team, notificationData)) =>                                       
+                                  case (acc, (team, notificationData)) =>
                                         mongoService.hasBeenNotified(team).map(hasBeenNotified =>
                                           if (hasBeenNotified){
                                             logger.info(s"Notifications for team '$team' were already triggered.")
@@ -105,22 +105,21 @@ class MongoNotificationsScheduler  @Inject()(
                                           }
                                         )
                                     }
-      mongoQueryNotifications <- notificationData.foldLeftM[Future, Seq[MongoQueryNotification]](Seq.empty) { case (acc, (team, notifications)) => 
-                                  if (slackNotificationsConfig.notifyTeams || slackNotificationsConfig.notificationChannels.nonEmpty) {
-                                    val notificationChannelsLookup = Option.when(slackNotificationsConfig.notificationChannels.nonEmpty)(SlackChannels(slackNotificationsConfig.notificationChannels))
-                                    val teamChannelLookup          = Option.when(slackNotificationsConfig.notifyTeams)(GithubTeam(team))
-                                    val channelLookups             = (notificationChannelsLookup ++ teamChannelLookup).toList
-                                    channelLookups.foldLeftM[Future, Seq[MongoQueryNotification]](acc) { case (a, cl) => notifyChannel(cl, notifications, team, env).map(_ ++ a)}
-                                  } else {
-                                    logger.info(s"Detected non-performant queries for team '$team'")
-                                    Future.successful(acc)
-                                  }
-                                    
-                                }
+      mongoQueryNotifications <- notificationData.foldLeftM[Future, Seq[MongoQueryNotification]](Seq.empty) { case (acc, (team, notifications)) =>
+                                   if (slackNotificationsConfig.notifyTeams || slackNotificationsConfig.notificationChannels.nonEmpty) {
+                                     val notificationChannelsLookup = Option.when(slackNotificationsConfig.notificationChannels.nonEmpty)(SlackChannels(slackNotificationsConfig.notificationChannels))
+                                     val teamChannelLookup          = Option.when(slackNotificationsConfig.notifyTeams)(GithubTeam(team))
+                                     val channelLookups             = (notificationChannelsLookup ++ teamChannelLookup).toList
+                                     channelLookups.foldLeftM[Future, Seq[MongoQueryNotification]](acc) { case (a, cl) => notifyChannel(cl, notifications, team, env).map(_ ++ a)}
+                                   } else {
+                                     logger.info(s"Detected non-performant queries for team '$team'")
+                                     Future.successful(acc)
+                                   }
+                                 }
       _                       <- if (mongoQueryNotifications.nonEmpty)
-                                  mongoService.flagAsNotified(mongoQueryNotifications)
-                                else
-                                  Future.unit
+                                   mongoService.flagAsNotified(mongoQueryNotifications)
+                                 else
+                                   Future.unit
     } yield ()
 
   private def notifyChannel(
@@ -146,7 +145,7 @@ class MongoNotificationsScheduler  @Inject()(
 
     slackNotificationsConnector.sendMessage(request)
       .collect {
-        case response if response.errors.isEmpty => 
+        case response if response.errors.isEmpty =>
           logger.info(s"Creating notification to save $team $notifications")
           notifications.map(nd =>
             MongoQueryNotification(
@@ -158,7 +157,7 @@ class MongoNotificationsScheduler  @Inject()(
               team        = team
             )
             )
-        case response => 
+        case response =>
           logger.error(s"Errors occurred when sending a slack notification ${response.errors}")
           Seq.empty
       }

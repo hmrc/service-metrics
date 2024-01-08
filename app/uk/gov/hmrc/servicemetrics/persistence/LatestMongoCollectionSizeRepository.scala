@@ -43,14 +43,12 @@ class LatestMongoCollectionSizeRepository @Inject()(
   private implicit val tc: TransactionConfiguration = TransactionConfiguration.strict
 
   def find(service: String, environment: Option[Environment] = None): Future[Seq[MongoCollectionSize]] = {
-
     val filters = Seq(
       Some(Filters.equal("service", service)),
       environment.map(env => Filters.equal("environment", env.asString))
     ).flatten
 
     collection.find(Filters.and(filters:_*)).toFuture()
-
   }
 
   def putAll(mcs: Seq[MongoCollectionSize], environment: Environment): Future[Unit] =
