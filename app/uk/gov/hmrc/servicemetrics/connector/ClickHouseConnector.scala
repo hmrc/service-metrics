@@ -28,8 +28,8 @@ import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class ClickHouseConnector @Inject()(
-  httpClientV2 : HttpClientV2
-, config       : ClickHouseConfig
+  httpClientV2: HttpClientV2
+, config      : ClickHouseConfig
 )(implicit
   ec: ExecutionContext
 ) {
@@ -42,5 +42,4 @@ class ClickHouseConnector @Inject()(
       .execute[JsValue]
       .map(json => (json \ "name").as[Seq[String]])
   }
-
 }

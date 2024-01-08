@@ -22,7 +22,6 @@ import uk.gov.hmrc.servicemetrics.scheduler.{MongoMetricsScheduler, MongoNotific
 class Module extends AbstractModule {
 
   override def configure(): Unit = {
-
     bind(classOf[AppConfig]).asEagerSingleton()
     bind(classOf[MongoMetricsScheduler]).asEagerSingleton()
     bind(classOf[MongoNotificationsScheduler]).asEagerSingleton()

@@ -42,12 +42,12 @@ class MongoQueryLogHistoryRepository @Inject()(
   collectionName = MongoQueryLogHistoryRepository.collectionName,
   domainFormat   = MongoQueryLogHistory.format,
   indexes        = Seq(
-      IndexModel(Indexes.ascending("service")),
-      IndexModel(Indexes.ascending("environment")),
-      IndexModel(Indexes.ascending("queryType")),
-      IndexModel(Indexes.ascending("since")),
-      IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(90, TimeUnit.DAYS)),
-    ),
+                     IndexModel(Indexes.ascending("service")),
+                     IndexModel(Indexes.ascending("environment")),
+                     IndexModel(Indexes.ascending("queryType")),
+                     IndexModel(Indexes.ascending("since")),
+                     IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(90, TimeUnit.DAYS)),
+                   ),
   extraCodecs    = Seq(Codecs.playFormatCodec(MongoQueryType.format))
 ) {
 
@@ -55,76 +55,47 @@ class MongoQueryLogHistoryRepository @Inject()(
     service    : String,
     from       : Instant,
     to         : Instant,
-  ): Future[Seq[NonPerformantQueries]] = {
-
-    val filters = Seq(
-      Filters.equal("service", service),
-      Filters.or(
-        Filters.and(
-          Filters.gte("timestamp", from),
-          Filters.lte("timestamp", to)
-        ),
-        Filters.and(
-          Filters.gte("since", from),
-          Filters.lte("since", to)
-        ),
-        Filters.and(
-          Filters.gte("since", from),
-          Filters.lte("timestamp", from)
-        ),
-        Filters.and(
-          Filters.gte("since", to),
-          Filters.lte("timestamp", to)
-        ),
-      ),
-    )
-
+  ): Future[Seq[NonPerformantQueries]] =
     collection
-      .find(Filters.and(filters: _*))
+      .find(
+        Filters.and(
+          Filters.equal("service", service),
+          Filters.or(
+            Filters.and(Filters.gte("timestamp", from), Filters.lte("timestamp", to  )),
+            Filters.and(Filters.gte("since"    , from), Filters.lte("since"    , to  )),
+            Filters.and(Filters.gte("since"    , from), Filters.lte("timestamp", from)),
+            Filters.and(Filters.gte("since"    , to  ), Filters.lte("timestamp", to  ))
+          )
+        )
+      )
       .toFuture()
       .map(_.groupBy(_.environment))
-      .map(_.map{ case (environment, results) =>
+      .map(_.map { case (environment, results) =>
         NonPerformantQueries(
           service,
           environment,
           results.map(_.queryType).distinct
         )
       }.toSeq)
-  }
 
   def getAll(
     environment: Environment,
     from       : Instant,
     to         : Instant,
-  ): Future[Seq[MongoQueryLogHistory]] = {
-
-    val filters = Seq(
-      Filters.equal("environment", environment.asString),
-      Filters.or(
+  ): Future[Seq[MongoQueryLogHistory]] =
+    collection
+      .find(
         Filters.and(
-          Filters.gte("timestamp", from),
-          Filters.lte("timestamp", to)
-        ),
-        Filters.and(
-          Filters.gte("since", from),
-          Filters.lte("since", to)
-        ),
-        Filters.and(
-          Filters.gte("since", from),
-          Filters.lte("timestamp", from)
-        ),
-        Filters.and(
-          Filters.gte("since", to),
-          Filters.lte("timestamp", to)
-        ),
-      ),
-    )
-
-    collection.find(
-        filter = Filters.and(filters: _*)
+          Filters.equal("environment", environment.asString),
+          Filters.or(
+            Filters.and(Filters.gte("timestamp", from), Filters.lte("timestamp", to  )),
+            Filters.and(Filters.gte("since"    , from), Filters.lte("since"    , to  )),
+            Filters.and(Filters.gte("since"    , from), Filters.lte("timestamp", from)),
+            Filters.and(Filters.gte("since"    , to  ), Filters.lte("timestamp", to  ))
+          )
+        )
       )
       .toFuture()
-  }
 
   def insertMany(logs: Seq[MongoQueryLogHistory]): Future[Unit] =
     collection.insertMany(logs).toFuture().map(_ => ())
@@ -182,7 +153,7 @@ object MongoQueryLogHistoryRepository {
   }
 
   sealed trait MongoQueryType { val value: String }
-  
+
   object MongoQueryType {
     case object SlowQuery extends MongoQueryType       { val value: String = "Slow Running Query" }
     case object NonIndexedQuery extends MongoQueryType { val value: String = "Non-indexed Collection Query" }
@@ -194,7 +165,7 @@ object MongoQueryLogHistoryRepository {
       override def writes(o: MongoQueryType): JsValue = JsString(o.value)
       override def reads(json: JsValue): JsResult[MongoQueryType] =
         json.validate[String]
-          .flatMap(s => 
+          .flatMap(s =>
             MongoQueryType.values.find(_.value == s)
               .map(e => JsSuccess(e)).getOrElse(JsError("Invalid MongoDb query type"))
           )

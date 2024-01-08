@@ -54,7 +54,7 @@ class MongoMetricsScheduler @Inject()(
     logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")
     implicit val hc: HeaderCarrier = HeaderCarrier()
     for {
-      _ <- Future.traverse(envs)(updatePerEnvironment(_))
+      _ <- Future.traverse(envs)(updatePerEnvironment)
     } yield logger.info(s"Finished updating mongo metrics for ${envs.mkString(", ")}")
   }
 
@@ -67,16 +67,15 @@ class MongoMetricsScheduler @Inject()(
                 logger.error(s"Failed to update mongo collection sizes for ${env.asString}", e)
                 Future.unit
             }
-      _ <- 
-          if (schedulerConfig.collectNonPerfomantQueriesEnabled)
-             mongoMetricsService
-            .insertQueryLogs(env)
-            .recoverWith {
-              case NonFatal(e) =>
-                logger.error(s"Failed to insert mongo query logs for ${env.asString}", e)
-                Future.unit
-            }
-          else
-            Future.unit
+      _ <- if (schedulerConfig.collectNonPerfomantQueriesEnabled)
+              mongoMetricsService
+             .insertQueryLogs(env)
+             .recoverWith {
+               case NonFatal(e) =>
+                 logger.error(s"Failed to insert mongo query logs for ${env.asString}", e)
+                 Future.unit
+             }
+           else
+             Future.unit
     } yield ()
 }
