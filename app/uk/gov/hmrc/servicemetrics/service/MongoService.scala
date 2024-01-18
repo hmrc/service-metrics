@@ -61,6 +61,8 @@ class MongoService @Inject()(
       collSizes   <- mappings.foldLeftM[Future, Seq[MongoCollectionSize]](Seq.empty){
                        (acc, mapping) => getCollectionSizes(mapping, environment).map(acc ++ _)
                      }
+      _           <- latestRepository.putAll(collSizes, environment)
+      _           <- storeHistory(collSizes, environment)
     } yield logger.info(s"Successfully updated mongo collection sizes for ${environment.asString}")
   }
 
