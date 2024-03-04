@@ -99,7 +99,7 @@ with MockitoSugar {
           |]""".stripMargin
 
       stubFor(
-        get(urlEqualTo("/api/v2/repositories"))
+        get(urlEqualTo("/api/v2/repositories?repoType=service"))
           .willReturn(
             aResponse()
               .withStatus(200)
