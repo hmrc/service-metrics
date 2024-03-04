@@ -62,7 +62,7 @@ class MongoCollectionSizeHistoryRepository @Inject()(
       .find(
         Filters.and(
           Filters.equal("environment", environment.asString),
-          Filters.gt("date", afterDate)
+          Filters.gte("date", afterDate)
         )
       )
       .limit(1)
