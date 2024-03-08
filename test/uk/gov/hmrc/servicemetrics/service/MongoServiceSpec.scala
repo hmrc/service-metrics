@@ -93,6 +93,9 @@ class MongoServiceSpec
         when(mockTeamsAndReposConnector.allServices()(any[HeaderCarrier]))
           .thenReturn(Future.successful(knownServices))
 
+        when(mockTeamsAndReposConnector.allDeletedServices()(any[HeaderCarrier]))
+          .thenReturn(Future.successful(Nil))
+
         when(mockGitHubProxyConnector.getMongoOverrides(any[Environment])(any[HeaderCarrier]))
           .thenReturn(Future.successful(Seq.empty))
 
@@ -123,6 +126,7 @@ class MongoServiceSpec
 
         verify(mockClickHouseConnector, times(1)).getDatabaseNames(Environment.QA)(hc)
         verify(mockTeamsAndReposConnector, times(1)).allServices()(hc)
+        verify(mockTeamsAndReposConnector, times(1)).allDeletedServices()(hc)
         verify(mockGitHubProxyConnector, times(1)).getMongoOverrides(Environment.QA)(hc)
         verify(mockElasticsearchConnector, times(1)).getSlowQueries(same(Environment.QA), same("service-one"), any[Instant], any[Instant])(same(hc))
         verify(mockElasticsearchConnector, times(1)).getNonIndexedQueries(same(Environment.QA), same("service-one"), any[Instant], any[Instant])(same(hc))
@@ -178,13 +182,16 @@ class MongoServiceSpec
       implicit val hc: HeaderCarrier = HeaderCarrier()
 
       when(mockClickHouseConnector.getDatabaseNames(any[Environment])(any[HeaderCarrier]))
-      .thenReturn(Future.successful(databases))
+        .thenReturn(Future.successful(databases))
 
       when(mockTeamsAndReposConnector.allServices()(any[HeaderCarrier]))
-      .thenReturn(Future.successful(knownServices))
+        .thenReturn(Future.successful(knownServices))
+
+      when(mockTeamsAndReposConnector.allDeletedServices()(any[HeaderCarrier]))
+        .thenReturn(Future.successful(Nil))
 
       when(mockGitHubProxyConnector.getMongoOverrides(any[Environment])(any[HeaderCarrier]))
-      .thenReturn(Future.successful(dbOverrides))
+        .thenReturn(Future.successful(dbOverrides))
 
       val expected = Seq(
         DbMapping(ServiceName("service-one"), "service-one", Seq("service-one-frontend"), Seq("team-one")),
