@@ -184,24 +184,26 @@ class MongoService @Inject()(
 
   private[service] def getMappings(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[DbMapping]] =
     for {
-      databases         <- clickHouseConnector.getDatabaseNames(environment)
-      knownServices     <- teamsAndRepositoriesConnector.allServices()
-      dbOverrides       <- gitHubProxyConnector.getMongoOverrides(environment)
-      mappings          =  for {
-                             database    <- databases
-                             filterOut   =  databases.filter(_.startsWith(database + "-"))
-                             services    =  dbOverrides.filter(_.dbs.contains(database)).toList match {
-                                              case Nil       => knownServices.filter(_.name.value == database)
-                                              case List(o)   => knownServices.filter(_.name.value == o.service)
-                                              case overrides => overrides.flatMap(o => knownServices.filter(_.name.value == o.service))
-                                            }
-                             service     <- services
-                           } yield DbMapping(
-                             service   = service.name,
-                             teams     = service.teamNames,
-                             database  = database,
-                             filterOut = filterOut
-                           )
+      databases     <- clickHouseConnector.getDatabaseNames(environment)
+      knownServices <- ( teamsAndRepositoriesConnector.allServices()
+                       , teamsAndRepositoriesConnector.allDeletedServices()
+                       ).mapN(_ ++ _)
+      dbOverrides   <- gitHubProxyConnector.getMongoOverrides(environment)
+      mappings      =  for {
+                         database  <- databases
+                         filterOut =  databases.filter(_.startsWith(database + "-"))
+                         services  =  dbOverrides.filter(_.dbs.contains(database)).toList match {
+                                        case Nil       => knownServices.filter(_.name.value == database)
+                                        case List(o)   => knownServices.filter(_.name.value == o.service)
+                                        case overrides => overrides.flatMap(o => knownServices.filter(_.name.value == o.service))
+                                      }
+                         service   <- services
+                       } yield DbMapping(
+                         service   = service.name,
+                         teams     = service.teamNames,
+                         database  = database,
+                         filterOut = filterOut
+                       )
     } yield mappings
 }
 

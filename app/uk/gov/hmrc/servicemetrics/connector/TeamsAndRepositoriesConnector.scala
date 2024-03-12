@@ -36,12 +36,17 @@ class TeamsAndRepositoriesConnector @Inject() (
   private val teamsAndRepositoriesBaseUrl: String =
     servicesConfig.baseUrl("teams-and-repositories")
 
-  def allServices()(implicit hc: HeaderCarrier): Future[Seq[Service]] = {
-    implicit val reads: Reads[Service] = Service.reads
+  private implicit val reads: Reads[Service] = Service.reads
+
+  def allServices()(implicit hc: HeaderCarrier): Future[Seq[Service]] =
     httpClientV2
       .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories?repoType=service")
       .execute[Seq[Service]]
-  }
+
+  def allDeletedServices()(implicit hc: HeaderCarrier): Future[Seq[Service]] =
+    httpClientV2
+      .get(url"$teamsAndRepositoriesBaseUrl/api/deleted-repositories?repoType=service")
+      .execute[Seq[Service]]
 }
 
 object TeamsAndRepositoriesConnector {
