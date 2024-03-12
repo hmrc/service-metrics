@@ -188,6 +188,7 @@ class MongoService @Inject()(
       knownServices <- ( teamsAndRepositoriesConnector.allServices()
                        , teamsAndRepositoriesConnector.allDeletedServices()
                        ).mapN(_ ++ _)
+                        .map(_.distinctBy(_.name))
       dbOverrides   <- gitHubProxyConnector.getMongoOverrides(environment)
       mappings      =  for {
                          database  <- databases
