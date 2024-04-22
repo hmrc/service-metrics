@@ -59,8 +59,8 @@ object TeamsAndRepositoriesConnector {
 
   object Service {
     val reads: Reads[Service] =
-      ( (__ \ "name"     ).read[String].map(ServiceName(_))
-      ~ (__ \ "teamNames").read[Seq[String]]
+      ( (__ \ "name"     ).read[String].map(ServiceName.apply)
+      ~ (__ \ "teamNames").readWithDefault[Seq[String]](Seq.empty)
       )(Service.apply _)
   }
 }
