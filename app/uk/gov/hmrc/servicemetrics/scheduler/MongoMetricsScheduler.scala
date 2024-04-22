@@ -16,6 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.scheduler
 
+import cats.implicits._
 import org.apache.pekko.actor.ActorSystem
 import play.api.Logger
 import play.api.inject.ApplicationLifecycle
@@ -54,7 +55,7 @@ class MongoMetricsScheduler @Inject()(
     logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")
     implicit val hc: HeaderCarrier = HeaderCarrier()
     for {
-      _ <- Future.traverse(envs)(updatePerEnvironment)
+      _ <- envs.foldLeftM(())((_, env) => updatePerEnvironment(env))
     } yield logger.info(s"Finished updating mongo metrics for ${envs.mkString(", ")}")
   }
 
