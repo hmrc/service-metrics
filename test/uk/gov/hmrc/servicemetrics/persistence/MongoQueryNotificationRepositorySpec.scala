@@ -29,8 +29,8 @@ import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 
 class MongoQueryNotificationRepositorySpec
   extends AnyWordSpec
-  with Matchers
-  with DefaultPlayMongoRepositorySupport[MongoQueryNotificationRepository.MongoQueryNotification] {
+    with Matchers
+    with DefaultPlayMongoRepositorySupport[MongoQueryNotificationRepository.MongoQueryNotification] {
 
   private val config = Configuration(ConfigFactory.parseString(s"""
     |mongo-metrics-scheduler {
@@ -63,7 +63,9 @@ class MongoQueryNotificationRepositorySpec
     |  }
     |}
     |""".stripMargin))
-  override lazy val repository = new MongoQueryNotificationRepository(mongoComponent, new SlackNotificationsConfig(config))
+
+  override val repository: MongoQueryNotificationRepository =
+    new MongoQueryNotificationRepository(mongoComponent, new SlackNotificationsConfig(config))
 
   private def seed(env: Environment) = Seq(
     MongoQueryNotificationRepository.MongoQueryNotification(
@@ -80,7 +82,7 @@ class MongoQueryNotificationRepositorySpec
   "hasBeenNotified" should {
     "return true" when {
       "there are notifications for a service, collection, environment and query type" in {
-        
+
         val team        = "team"
         val environment = Environment.QA
 

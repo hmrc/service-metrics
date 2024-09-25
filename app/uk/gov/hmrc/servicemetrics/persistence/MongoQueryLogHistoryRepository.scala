@@ -16,13 +16,13 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
+import org.mongodb.scala.ObservableFuture
 import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes, Sorts}
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import uk.gov.hmrc.mongo.MongoComponent
-import uk.gov.hmrc.mongo.play.json.Codecs
+import uk.gov.hmrc.mongo.play.json.{Codecs, PlayMongoRepository}
 import uk.gov.hmrc.mongo.play.json.formats.MongoJavatimeFormats
-import uk.gov.hmrc.mongo.play.json.PlayMongoRepository
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
@@ -123,7 +123,7 @@ object MongoQueryLogHistoryRepository {
       ( (__ \ "collection").format[String]
       ~ (__ \ "duration"  ).format[Int]
       ~ (__ \ "occurences").format[Int]
-      )(NonPerformantQueryDetails.apply _, unlift(NonPerformantQueryDetails.unapply _))
+      )(NonPerformantQueryDetails.apply _, o => Tuple.fromProductTyped(o))
   }
 
   final case class MongoQueryLogHistory(
@@ -149,7 +149,7 @@ object MongoQueryLogHistoryRepository {
       ~ (__ \ "details"    ).format[Seq[NonPerformantQueryDetails]]
       ~ (__ \ "environment").format[Environment](Environment.format)
       ~ (__ \ "teams"      ).format[Seq[String]]
-      )(MongoQueryLogHistory.apply _, unlift(MongoQueryLogHistory.unapply _))
+      )(MongoQueryLogHistory.apply _, o => Tuple.fromProductTyped(o))
   }
 
   sealed trait MongoQueryType { val value: String }
@@ -184,6 +184,6 @@ object MongoQueryLogHistoryRepository {
       ( (__ \ "service"    ).format[String]
       ~ (__ \ "environment").format[Environment](Environment.format)
       ~ (__ \ "queryTypes" ).format[Seq[MongoQueryType]]
-      )(NonPerformantQueries.apply _, unlift(NonPerformantQueries.unapply _))
+      )(NonPerformantQueries.apply _, o => Tuple.fromProductTyped(o))
   }
 }

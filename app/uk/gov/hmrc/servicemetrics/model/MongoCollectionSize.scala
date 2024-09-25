@@ -16,7 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.model
 
-import play.api.libs.functional.syntax.{toFunctionalBuilderOps, unlift}
+import play.api.libs.functional.syntax.toFunctionalBuilderOps
 import play.api.libs.json.{OFormat, Writes, __}
 import uk.gov.hmrc.mongo.play.json.formats.MongoJavatimeFormats
 
@@ -41,7 +41,7 @@ object MongoCollectionSize {
     ~ (__ \ "date"       ).format[LocalDate]
     ~ (__ \ "environment").format[Environment]
     ~ (__ \ "service"    ).format[String]
-    )(apply, unlift(unapply))
+    )(apply, o => Tuple.fromProductTyped(o))
   }
 
   val apiWrites: Writes[MongoCollectionSize] = {
@@ -52,6 +52,6 @@ object MongoCollectionSize {
     ~ (__ \ "date"       ).write[LocalDate]
     ~ (__ \ "environment").write[Environment]
     ~ (__ \ "service"    ).write[String]
-    )(unlift(unapply))
+    )(o => Tuple.fromProductTyped(o))
   }
 }

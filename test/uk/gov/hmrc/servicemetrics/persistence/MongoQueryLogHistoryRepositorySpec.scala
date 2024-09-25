@@ -26,10 +26,11 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class MongoQueryLogHistoryRepositorySpec
   extends AnyWordSpec
-  with Matchers
-  with DefaultPlayMongoRepositorySupport[MongoQueryLogHistoryRepository.MongoQueryLogHistory] {
+     with Matchers
+     with DefaultPlayMongoRepositorySupport[MongoQueryLogHistoryRepository.MongoQueryLogHistory] {
 
-  override lazy val repository = new MongoQueryLogHistoryRepository(mongoComponent)
+  override val repository: MongoQueryLogHistoryRepository =
+    new MongoQueryLogHistoryRepository(mongoComponent)
 
   private def seed(
       env            : Environment,

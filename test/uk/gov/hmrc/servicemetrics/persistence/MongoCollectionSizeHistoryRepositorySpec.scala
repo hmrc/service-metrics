@@ -29,7 +29,8 @@ class MongoCollectionSizeHistoryRepositorySpec
   with Matchers
   with DefaultPlayMongoRepositorySupport[MongoCollectionSize] {
 
-  override lazy val repository = new MongoCollectionSizeHistoryRepository(mongoComponent)
+  override val repository: MongoCollectionSizeHistoryRepository =
+    new MongoCollectionSizeHistoryRepository(mongoComponent)
 
   private def seed(env: Environment) = Seq(
     MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now(), env, "service-one")

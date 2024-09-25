@@ -37,16 +37,16 @@ class GitHubProxyConnectorSpec
   with HttpClientV2Support
   with WireMockSupport {
 
-    private lazy val gitHubProxyConnector =
-      new GitHubProxyConnector(
-        httpClientV2   = httpClientV2,
-        new ServicesConfig(Configuration(
-          "microservice.services.platops-github-proxy.port" -> wireMockPort,
-          "microservice.services.platops-github-proxy.host" -> wireMockHost
-        ))
-      )
+  private lazy val gitHubProxyConnector =
+    new GitHubProxyConnector(
+      httpClientV2   = httpClientV2,
+      new ServicesConfig(Configuration(
+        "microservice.services.platops-github-proxy.port" -> wireMockPort,
+        "microservice.services.platops-github-proxy.host" -> wireMockHost
+      ))
+    )
 
-    implicit val headerCarrier: HeaderCarrier = HeaderCarrier()
+  implicit val headerCarrier: HeaderCarrier = HeaderCarrier()
 
 
   "getMongoOverrides" should {
