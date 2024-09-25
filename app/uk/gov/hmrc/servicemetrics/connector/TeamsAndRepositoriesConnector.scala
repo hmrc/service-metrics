@@ -31,25 +31,24 @@ import scala.concurrent.{ExecutionContext, Future}
 class TeamsAndRepositoriesConnector @Inject() (
   httpClientV2  : HttpClientV2,
   servicesConfig: ServicesConfig
-)(implicit val ec: ExecutionContext) {
+)(using ExecutionContext):
 
   private val teamsAndRepositoriesBaseUrl: String =
     servicesConfig.baseUrl("teams-and-repositories")
 
-  private implicit val reads: Reads[Service] = Service.reads
+  private given Reads[Service] = Service.reads
 
-  def allServices()(implicit hc: HeaderCarrier): Future[Seq[Service]] =
+  def allServices()(using HeaderCarrier): Future[Seq[Service]] =
     httpClientV2
       .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories?repoType=service")
       .execute[Seq[Service]]
 
-  def allDeletedServices()(implicit hc: HeaderCarrier): Future[Seq[Service]] =
+  def allDeletedServices()(using HeaderCarrier): Future[Seq[Service]] =
     httpClientV2
       .get(url"$teamsAndRepositoriesBaseUrl/api/deleted-repositories?repoType=service")
       .execute[Seq[Service]]
-}
 
-object TeamsAndRepositoriesConnector {
+object TeamsAndRepositoriesConnector:
   case class ServiceName(value: String) extends AnyVal
 
   case class Service(
@@ -61,6 +60,5 @@ object TeamsAndRepositoriesConnector {
     val reads: Reads[Service] =
       ( (__ \ "name"     ).read[String].map(ServiceName.apply)
       ~ (__ \ "teamNames").readWithDefault[Seq[String]](Seq.empty)
-      )(Service.apply _)
+      )(Service.apply)
   }
-}

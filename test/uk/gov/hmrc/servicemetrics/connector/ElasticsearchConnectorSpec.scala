@@ -17,7 +17,6 @@
 package uk.gov.hmrc.servicemetrics.connector
 
 import com.github.tomakehurst.wiremock.client.WireMock._
-import com.typesafe.config.ConfigFactory
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -39,43 +38,39 @@ class ElasticsearchConnectorSpec
     with IntegrationPatience
     with HttpClientV2Support
     with WireMockSupport
-    with MockitoSugar {
+    with MockitoSugar:
 
   import ElasticsearchConnector._
 
-  private implicit val hc: HeaderCarrier = HeaderCarrier()
-  private val servicesConfig   = new ServicesConfig(
-    Configuration(ConfigFactory.parseString(s"""
-    |microservice {
-    |  services {
-    |    elasticsearch {
-    |      host                                       = "$wireMockHost"
-    |      port                                       = $wireMockPort
-    |      mongodb-index                              = "mongodb-logs"
-    |      username                                   = "changeme"
-    |      development.password                       = "Y2hhbmdlbWU="
-    |      integration.password                       = "Y2hhbmdlbWU="
-    |      qa.password                                = "Y2hhbmdlbWU="
-    |      staging.password                           = "Y2hhbmdlbWU="
-    |      externaltest.password                      = "Y2hhbmdlbWU="
-    |      production.password                        = "Y2hhbmdlbWU="
-    |      long-running-query-in-milliseconds         = 3000
-    |      non-performant-queries-interval-in-minutes = 1440
-    |    }
-    |  }
-    |}
-    """.stripMargin))
-  )
+  private given HeaderCarrier = HeaderCarrier()
+
+  private val servicesConfig =
+    ServicesConfig(
+      Configuration(
+        "microservice.services.elasticsearch.host"                                       -> wireMockHost
+      , "microservice.services.elasticsearch.port"                                       -> wireMockPort
+      , "microservice.services.elasticsearch.mongodb-index"                              -> "mongodb-logs"
+      , "microservice.services.elasticsearch.username"                                   -> "changeme"
+      , "microservice.services.elasticsearch.development.password"                       -> "Y2hhbmdlbWU="
+      , "microservice.services.elasticsearch.integration.password"                       -> "Y2hhbmdlbWU="
+      , "microservice.services.elasticsearch.qa.password"                                -> "Y2hhbmdlbWU="
+      , "microservice.services.elasticsearch.staging.password"                           -> "Y2hhbmdlbWU="
+      , "microservice.services.elasticsearch.externaltest.password"                      -> "Y2hhbmdlbWU="
+      , "microservice.services.elasticsearch.production.password"                        -> "Y2hhbmdlbWU="
+      , "microservice.services.elasticsearch.long-running-query-in-milliseconds"         -> 3000
+      , "microservice.services.elasticsearch.non-performant-queries-interval-in-minutes" -> 1440
+      )
+    )
 
   private val mongoDbLogsIndex = "mongodb-logs"
   private val mongoDbDatabase  = "preferences"
   private val now              = Instant.now()
 
-  val connector = new ElasticsearchConnector(httpClientV2, new ElasticsearchConfig(servicesConfig))
+  private val connector =
+    ElasticsearchConnector(httpClientV2, ElasticsearchConfig(servicesConfig))
 
-  "getMongoDbLogs" should {
-    "return mongo logs" in {
-
+  "getMongoDbLogs" should:
+    "return mongo logs" in:
         val rawResponse =
           s"""
             |{
@@ -110,14 +105,12 @@ class ElasticsearchConnectorSpec
             |}
             |""".stripMargin
 
-        stubFor(
+        stubFor:
           post(urlPathEqualTo(s"/$mongoDbLogsIndex/_search/"))
-            .willReturn(
+            .willReturn:
               aResponse()
                 .withStatus(200)
                 .withBody(rawResponse)
-            )
-        )
 
         val expectedResult = MongoQueryLog(
             since                = now,
@@ -134,6 +127,3 @@ class ElasticsearchConnectorSpec
 
         mongoDbLog.database shouldBe expectedResult.database
         mongoDbLog.nonPerformantQueries should contain theSameElementsAs expectedResult.nonPerformantQueries
-    }
-  }
-}

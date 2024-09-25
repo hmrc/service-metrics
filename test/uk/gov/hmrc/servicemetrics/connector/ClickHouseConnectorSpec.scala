@@ -35,23 +35,23 @@ class ClickHouseConnectorSpec
      with ScalaFutures
      with HttpClientV2Support
      with WireMockSupport
-     with MockitoSugar {
+     with MockitoSugar:
 
-  private implicit val hc: HeaderCarrier = HeaderCarrier()
+  private given HeaderCarrier = HeaderCarrier()
 
   private val mockConfig = mock[ClickHouseConfig]
 
-  when(mockConfig.urls).thenReturn {
-    Environment.values
-      .filterNot(_ == Environment.Integration)
-      .map(env => env -> wireMockUrl)
-      .toMap
-  }
+  when(mockConfig.urls)
+    .thenReturn:
+      Environment.values
+        .filterNot(_ == Environment.Integration)
+        .map(env => env -> wireMockUrl)
+        .toMap
 
-  val connector = new ClickHouseConnector(httpClientV2, mockConfig)
+  val connector = ClickHouseConnector(httpClientV2, mockConfig)
 
-  "getDatabaseNames" should {
-    "return a list of database names" in {
+  "getDatabaseNames" should:
+    "return a list of database names" in:
       val rawResponse =
         """
           |{
@@ -59,20 +59,15 @@ class ClickHouseConnectorSpec
           |}
           |""".stripMargin
 
-      stubFor(
+      stubFor:
         get(urlEqualTo("/latest/mongodbs"))
-          .willReturn(
+          .willReturn:
             aResponse()
               .withStatus(200)
               .withBody(rawResponse)
-          )
-      )
 
       val expected = Seq("database-one", "database-two", "database-three")
 
       val response = connector.getDatabaseNames(Environment.QA).futureValue
 
       response should contain theSameElementsAs expected
-    }
-  }
-}

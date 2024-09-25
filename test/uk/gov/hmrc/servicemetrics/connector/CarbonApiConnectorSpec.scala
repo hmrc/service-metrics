@@ -39,18 +39,19 @@ class CarbonApiConnectorSpec
     with IntegrationPatience
     with HttpClientV2Support
     with WireMockSupport
-    with MockitoSugar {
+    with MockitoSugar:
 
-  private implicit val hc: HeaderCarrier = HeaderCarrier()
+  private given HeaderCarrier = HeaderCarrier()
 
   private val mockConfig: ServicesConfig = mock[ServicesConfig]
 
-  when(mockConfig.baseUrl(any[String])).thenReturn(wireMockUrl)
+  when(mockConfig.baseUrl(any[String]))
+    .thenReturn(wireMockUrl)
 
-  val connector = new CarbonApiConnector(httpClientV2, mockConfig)
+  val connector = CarbonApiConnector(httpClientV2, mockConfig)
 
-  "getMongoMetrics" should {
-    "return mongo metrics" in {
+  "getMongoMetrics" should:
+    "return mongo metrics" in:
 
       val rawResponse =
         """
@@ -83,14 +84,12 @@ class CarbonApiConnectorSpec
           |  }
           |]""".stripMargin
 
-      stubFor(
+      stubFor:
         get(urlPathEqualTo("/render"))
-          .willReturn(
+          .willReturn:
             aResponse()
               .withStatus(200)
               .withBody(rawResponse)
-          )
-      )
 
       val expected = Seq(
         MongoCollectionSizeMetric(
@@ -108,6 +107,3 @@ class CarbonApiConnectorSpec
       val response = connector.getCollectionSizes(Environment.QA, "service-one").futureValue
 
       response should contain theSameElementsAs expected
-    }
-  }
-}

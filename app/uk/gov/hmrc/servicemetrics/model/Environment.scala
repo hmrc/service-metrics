@@ -21,7 +21,7 @@ import play.api.mvc.{PathBindable, QueryStringBindable}
 
 sealed trait Environment { def asString: String }
 
-object Environment {
+object Environment:
   case object Development  extends Environment { val asString = "development" }
   case object Integration  extends Environment { val asString = "integration" }
   case object QA           extends Environment { val asString = "qa"          }
@@ -33,43 +33,38 @@ object Environment {
   // this list is sorted
     List(Development, Integration, QA, Staging, ExternalTest, Production)
 
-  implicit val ordering: Ordering[Environment] = new Ordering[Environment] {
-    def compare(x: Environment, y: Environment): Int =
-      values.indexOf(x).compare(values.indexOf(y))
-  }
+  given Ordering[Environment] =
+    Ordering.by(values.indexOf)
 
   def parse(s: String): Option[Environment] =
     values.find(_.asString == s)
 
-  val format: Format[Environment] = new Format[Environment] {
-    override def writes(o: Environment): JsValue = JsString(o.asString)
-    override def reads(json: JsValue): JsResult[Environment] =
-      json.validate[String].flatMap(s => Environment.parse(s).map(e => JsSuccess(e)).getOrElse(JsError("invalid environment")))
-  }
+  val format: Format[Environment] =
+    new Format[Environment]:
+      override def writes(o: Environment): JsValue =
+        JsString(o.asString)
+
+      override def reads(json: JsValue): JsResult[Environment] =
+        json.validate[String].flatMap(s => Environment.parse(s).map(e => JsSuccess(e)).getOrElse(JsError("invalid environment")))
 
   implicit val pathBindable: PathBindable[Environment] =
-    new PathBindable[Environment] {
+    new PathBindable[Environment]:
       override def bind(key: String, value: String): Either[String, Environment] =
         parse(value).toRight(s"Invalid Environment '$value'")
 
       override def unbind(key: String, value: Environment): String =
         value.asString
-    }
 
   implicit val queryStringBindable: QueryStringBindable[Environment] =
-    new QueryStringBindable[Environment] {
+    new QueryStringBindable[Environment]:
       private val name = "environment"
 
       override def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, Environment]] =
-        params.get(name).map { values =>
-          values.toList match {
+        params.get(name).map: values =>
+          values.toList match
             case Nil         => Left("missing environment value")
             case head :: Nil => pathBindable.bind(key, head)
             case _           => Left("too many environment values")
-          }
-        }
 
       override def unbind(key: String, value: Environment): String =
         s"$name=${value.asString}"
-    }
-}

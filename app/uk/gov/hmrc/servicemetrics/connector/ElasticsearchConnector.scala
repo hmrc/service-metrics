@@ -18,7 +18,7 @@ package uk.gov.hmrc.servicemetrics.connector
 
 import play.api.libs.functional.syntax.toFunctionalBuilderOps
 import play.api.libs.json._
-import play.api.libs.ws.writeableOf_String
+import play.api.libs.ws.writeableOf_JsValue
 import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
@@ -34,22 +34,22 @@ import java.util.Base64
 class ElasticsearchConnector @Inject()(
   httpClientV2 : HttpClientV2
 , elasticsearchConfig: ElasticsearchConfig
-)(implicit
-  ec: ExecutionContext
-) extends play.api.Logging {
+)(using
+  ExecutionContext
+) extends play.api.Logging:
 
   import ElasticsearchConnector._
 
   private val basicAuthenticationCredentials =
     elasticsearchConfig.environmentPasswords
-      .map { case (env, password) =>
+      .map: (env, password) =>
         val decodedPassword =
-          scala.util.Try(new String(Base64.getDecoder.decode(password)).trim())
+          scala.util.Try(String(Base64.getDecoder.decode(password)).trim)
+            // TODO fail if invalid password
             .getOrElse { logger.info(s"Couldn't decode password for env ${env.asString}"); "" }
-        env -> s"Basic ${new String(Base64.getEncoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
-      }
+        env -> s"Basic ${String(Base64.getEncoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
 
-  def getSlowQueries(environment: Environment, database: String, from: Instant, to: Instant)(implicit hc: HeaderCarrier): Future[Option[MongoQueryLog]] =
+  def getSlowQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Option[MongoQueryLog]] =
     getMongoDbLogs(
       environment,
       s"duration:>${elasticsearchConfig.longRunningQueryInMilliseconds}",
@@ -58,7 +58,7 @@ class ElasticsearchConnector @Inject()(
       to,
     )
 
-  def getNonIndexedQueries(environment: Environment, database: String, from: Instant, to: Instant)(implicit hc: HeaderCarrier): Future[Option[MongoQueryLog]] =
+  def getNonIndexedQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Option[MongoQueryLog]] =
     getMongoDbLogs(
       environment,
       "scan: COLLSCAN",
@@ -67,99 +67,92 @@ class ElasticsearchConnector @Inject()(
       to,
     )
 
-  private def getMongoDbLogs(environment: Environment, query: String, database: String, from: Instant, to: Instant)(implicit hc: HeaderCarrier): Future[Option[MongoQueryLog]] = {
+  private def getMongoDbLogs(environment: Environment, query: String, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Option[MongoQueryLog]] =
     val baseUrl = elasticsearchConfig.elasticSearchBaseUrl.replace("$env", environment.asString)
 
-    implicit val mmr: Reads[Seq[MongoCollectionNonPerfomantQuery]] = MongoCollectionNonPerfomantQuery.reads
+    given Reads[Seq[MongoCollectionNonPerfomantQuery]] = MongoCollectionNonPerfomantQuery.reads
 
-    val body = s"""
-    {
-      "size": 0,
-      "query": {
-        "bool": {
-          "must": [
-            {
-              "query_string": {
-                "query": "type:mongodb AND NOT mongo_db:(\\\"backup_mongo\\\"|\\\"backup_protected-mongo\\\"|\\\"backup_protected-auth-mongo\\\"|\\\"backup_protected-centralised-auth-mongo\\\"|\\\"backup_protected-rate-mongo\\\"|\\\"backup_public-mongo\\\") AND $query AND  database.raw:\\\"$database\\\""
-              }
-            }
-          ],
-          "filter": [
-            {
-              "range": {
-                "@timestamp": {
-                  "format": "strict_date_optional_time",
-                  "gte": "$from",
-                  "lte": "$to"
+    val body = Json.parse(s"""
+      {
+        "size": 0,
+        "query": {
+          "bool": {
+            "must": [
+              {
+                "query_string": {
+                  "query": "type:mongodb AND NOT mongo_db:(\\\"backup_mongo\\\"|\\\"backup_protected-mongo\\\"|\\\"backup_protected-auth-mongo\\\"|\\\"backup_protected-centralised-auth-mongo\\\"|\\\"backup_protected-rate-mongo\\\"|\\\"backup_public-mongo\\\") AND $query AND  database.raw:\\\"$database\\\""
                 }
               }
+            ],
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "format": "strict_date_optional_time",
+                    "gte": "$from",
+                    "lte": "$to"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "collections": {
+            "terms": { "field": "collection.raw" },
+            "aggs": {
+              "avg_duration" : { "avg" : { "field" : "duration" } }
             }
-          ]
-        }
-      },
-      "aggs": {
-        "collections": {
-          "terms": { "field": "collection.raw" },
-          "aggs": {
-            "avg_duration" : { "avg" : { "field" : "duration" } }
           }
-        }
-      },
-      "sort": [
-        {
-          "@timestamp": {
-            "order": "desc"
+        },
+        "sort": [
+          {
+            "@timestamp": {
+              "order": "desc"
+            }
           }
-        }
-      ]
-    }"""
+        ]
+      }""")
 
     httpClientV2
-      .post(url"$baseUrl/${elasticsearchConfig.mongoDbIndex}/_search/")(hc.withExtraHeaders(
-        "Authorization" -> basicAuthenticationCredentials(environment),
-        "Content-Type"   -> "application/json",
-      ))
+      .post(url"$baseUrl/${elasticsearchConfig.mongoDbIndex}/_search/")
+      .setHeader:
+        "Authorization" -> basicAuthenticationCredentials(environment)
       .withBody(body)
       .execute[JsValue]
-      .map(json =>
+      .map: json =>
         json.validate[Seq[MongoCollectionNonPerfomantQuery]]
-          .fold(error => {
-              logger.error(s"Error while parsing JSON $json\n\n$error")
-              Seq.empty
-            },
-            identity
+          .fold(error =>
+            logger.error(s"Error while parsing JSON $json\n\n$error")
+            Seq.empty
+          , identity
           )
-      )
-      .map(nonPerformantQueries =>
-        Option.when(nonPerformantQueries.nonEmpty)(
+      .map: nonPerformantQueries =>
+        Option.when(nonPerformantQueries.nonEmpty):
           MongoQueryLog(
             since                 = from,
             timestamp             = to,
             nonPerformantQueries  = nonPerformantQueries,
             database              = database,
           )
-        )
-      )
-  }
 
-}
-object ElasticsearchConnector {
+
+object ElasticsearchConnector:
+
   case class MongoCollectionNonPerfomantQuery(
     collection : String,
     occurrences: Int,
     duration   : Int,
   )
 
-  object MongoCollectionNonPerfomantQuery{
-    private implicit val readsLog: Reads[MongoCollectionNonPerfomantQuery] =
-      ( (__ \ "key").read[String]
-      ~ (__ \ "doc_count" ).read[Int]
-      ~ (__ \ "avg_duration" \ "value"  ).read[Double].map(_.toInt)
-      )(MongoCollectionNonPerfomantQuery.apply _)
-
+  object MongoCollectionNonPerfomantQuery:
     val reads: Reads[Seq[MongoCollectionNonPerfomantQuery]] =
+      given Reads[MongoCollectionNonPerfomantQuery] =
+        ( (__ \ "key").read[String]
+        ~ (__ \ "doc_count" ).read[Int]
+        ~ (__ \ "avg_duration" \ "value"  ).read[Double].map(_.toInt)
+        )(apply)
       (__ \ "aggregations" \ "collections" \ "buckets").read[Seq[MongoCollectionNonPerfomantQuery]]
-  }
 
   case class MongoQueryLog(
     since               : Instant,
@@ -167,4 +160,3 @@ object ElasticsearchConnector {
     nonPerformantQueries: Seq[MongoCollectionNonPerfomantQuery],
     database            : String,
   )
-}

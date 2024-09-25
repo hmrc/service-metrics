@@ -38,48 +38,44 @@ import scala.concurrent.{ExecutionContext, Future}
 class MongoQueryNotificationRepository @Inject()(
   mongoComponent          : MongoComponent,
   slackNotifiactionsConfig: SlackNotificationsConfig,
-)(implicit
-  ec: ExecutionContext
+)(using
+  ExecutionContext
 ) extends PlayMongoRepository(
   mongoComponent = mongoComponent,
-  collectionName = MongoQueryNotificationRepository.collectionName,
+  collectionName = "mongoQueryNotifications",
   domainFormat   = MongoQueryNotification.format,
   indexes        = Seq(
-      IndexModel(Indexes.ascending("service")),
-      IndexModel(Indexes.ascending("environment")),
-      IndexModel(Indexes.ascending("queryType")),
-      IndexModel(Indexes.ascending("collection")),
-      IndexModel(Indexes.ascending("team")),
-      IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(slackNotifiactionsConfig.throttlingPeriod.toDays, TimeUnit.DAYS)),
-    ),
+                     IndexModel(Indexes.ascending("service")),
+                     IndexModel(Indexes.ascending("environment")),
+                     IndexModel(Indexes.ascending("queryType")),
+                     IndexModel(Indexes.ascending("collection")),
+                     IndexModel(Indexes.ascending("team")),
+                     IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(slackNotifiactionsConfig.throttlingPeriod.toDays, TimeUnit.DAYS)),
+                   ),
   extraCodecs    = Seq(Codecs.playFormatCodec(MongoQueryType.format))
-) {
+):
 
   def insertMany(notifications: Seq[MongoQueryNotification]): Future[Unit] =
     collection.insertMany(notifications).toFuture().map(_ => ())
 
   def hasBeenNotified(team: String): Future[Boolean] =
-    collection.find(Filters.and(
-      Filters.eq("team", team)
-    ))
+    collection
+      .find(Filters.eq("team", team))
       .limit(1)
       .headOption()
       .map(_.isDefined)
-}
 
-object MongoQueryNotificationRepository {
-  val collectionName = "mongoQueryNotifications"
-
-  final case class MongoQueryNotification(
+object MongoQueryNotificationRepository:
+  case class MongoQueryNotification(
     service    : String,
     database   : String,
     environment: Environment,
     queryType  : MongoQueryType,
     timestamp  : Instant,
-    team       : String,
+    team       : String
   )
 
-  object MongoQueryNotification {
+  object MongoQueryNotification:
     val format: Format[MongoQueryNotification] =
       ( (__ \ "service"    ).format[String]
       ~ (__ \ "database"   ).format[String]
@@ -87,6 +83,4 @@ object MongoQueryNotificationRepository {
       ~ (__ \ "queryType"  ).format[MongoQueryType](MongoQueryType.format)
       ~ (__ \ "timestamp"  ).format[Instant](MongoJavatimeFormats.instantFormat)
       ~ (__ \ "team"       ).format[String]
-      )(MongoQueryNotification.apply _, o => Tuple.fromProductTyped(o))
-  }
-}
+      )(MongoQueryNotification.apply, o => Tuple.fromProductTyped(o))

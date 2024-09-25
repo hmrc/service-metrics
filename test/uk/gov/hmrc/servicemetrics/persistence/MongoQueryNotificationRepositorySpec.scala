@@ -30,7 +30,7 @@ import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 class MongoQueryNotificationRepositorySpec
   extends AnyWordSpec
     with Matchers
-    with DefaultPlayMongoRepositorySupport[MongoQueryNotificationRepository.MongoQueryNotification] {
+    with DefaultPlayMongoRepositorySupport[MongoQueryNotificationRepository.MongoQueryNotification]:
 
   private val config = Configuration(ConfigFactory.parseString(s"""
     |mongo-metrics-scheduler {
@@ -65,32 +65,26 @@ class MongoQueryNotificationRepositorySpec
     |""".stripMargin))
 
   override val repository: MongoQueryNotificationRepository =
-    new MongoQueryNotificationRepository(mongoComponent, new SlackNotificationsConfig(config))
+    MongoQueryNotificationRepository(mongoComponent, SlackNotificationsConfig(config))
 
-  private def seed(env: Environment) = Seq(
-    MongoQueryNotificationRepository.MongoQueryNotification(
-      timestamp   = Instant.now,
-      service     = "service",
-      database    = "database",
-      queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
-      environment = env,
-      team        = "team"
+  private def seed(env: Environment) =
+    Seq(
+      MongoQueryNotificationRepository.MongoQueryNotification(
+        timestamp   = Instant.now,
+        service     = "service",
+        database    = "database",
+        queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
+        environment = env,
+        team        = "team"
+      )
     )
-  )
 
-
-  "hasBeenNotified" should {
-    "return true" when {
-      "there are notifications for a service, collection, environment and query type" in {
-
+  "hasBeenNotified" should:
+    "return true" when:
+      "there are notifications for a service, collection, environment and query type" in:
         val team        = "team"
         val environment = Environment.QA
 
         repository.insertMany(seed(environment)).futureValue
 
         repository.hasBeenNotified(team).futureValue shouldBe true
-      }
-    }
-  }
-
-}

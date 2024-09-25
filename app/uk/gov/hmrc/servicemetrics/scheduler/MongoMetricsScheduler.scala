@@ -36,13 +36,15 @@ class MongoMetricsScheduler @Inject()(
   schedulerConfig     : SchedulerConfigs
 , lockRepository      : MongoLockRepository
 , mongoMetricsService : MongoService
-)(implicit
-  actorSystem          : ActorSystem
-, applicationLifecycle : ApplicationLifecycle
-, ec                   : ExecutionContext
-) extends SchedulerUtils {
+)(using
+  ActorSystem
+, ApplicationLifecycle
+, ExecutionContext
+) extends SchedulerUtils:
 
   override val logger = Logger(getClass)
+
+  private given HeaderCarrier = HeaderCarrier()
 
   scheduleWithLock(
     label           = "MongoMetricsScheduler",
@@ -51,32 +53,28 @@ class MongoMetricsScheduler @Inject()(
   ) {
     val envs: List[Environment] =
       Environment.values.filterNot(_.equals(Environment.Integration))
-
     logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")
-    implicit val hc: HeaderCarrier = HeaderCarrier()
-    for {
+    for
       _ <- envs.foldLeftM(())((_, env) => updatePerEnvironment(env))
-    } yield logger.info(s"Finished updating mongo metrics for ${envs.mkString(", ")}")
+    yield logger.info(s"Finished updating mongo metrics for ${envs.mkString(", ")}")
   }
 
   private def updatePerEnvironment(env: Environment)(implicit hc: HeaderCarrier) =
-    for {
+    for
       _ <- mongoMetricsService
-            .updateCollectionSizes(env)
-            .recoverWith {
-              case NonFatal(e) =>
-                logger.error(s"Failed to update mongo collection sizes for ${env.asString}", e)
-                Future.unit
-            }
-      _ <- if (schedulerConfig.collectNonPerfomantQueriesEnabled)
-              mongoMetricsService
-             .insertQueryLogs(env)
-             .recoverWith {
+             .updateCollectionSizes(env)
+             .recoverWith:
                case NonFatal(e) =>
-                 logger.error(s"Failed to insert mongo query logs for ${env.asString}", e)
+                 logger.error(s"Failed to update mongo collection sizes for ${env.asString}", e)
                  Future.unit
-             }
+      _ <-
+           if schedulerConfig.collectNonPerfomantQueriesEnabled then
+             mongoMetricsService
+               .insertQueryLogs(env)
+               .recoverWith:
+                 case NonFatal(e) =>
+                   logger.error(s"Failed to insert mongo query logs for ${env.asString}", e)
+                   Future.unit
            else
              Future.unit
-    } yield ()
-}
+    yield ()

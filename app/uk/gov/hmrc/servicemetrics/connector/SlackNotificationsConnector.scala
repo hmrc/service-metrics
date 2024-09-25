@@ -33,74 +33,73 @@ class SlackNotificationsConnector @Inject()(
   httpClientV2            : HttpClientV2,
   servicesConfig          : ServicesConfig,
   slackNotifiactionsConfig: SlackNotificationsConfig
-)(implicit val ec: ExecutionContext) {
+)(using ExecutionContext):
 
   private val url: String = servicesConfig.baseUrl("slack-notifications")
 
-  def sendMessage(message: SlackNotificationRequest): Future[SlackNotificationResponse] = {
-    implicit val hc         : HeaderCarrier = HeaderCarrier()
-    implicit val snreqWrites: OWrites[SlackNotificationRequest] = SlackNotificationsFormats.snreqWrites
-    implicit val snresReads : Reads[SlackNotificationResponse]  = SlackNotificationsFormats.snresReads
+  def sendMessage(message: SlackNotificationRequest)(using HeaderCarrier): Future[SlackNotificationResponse] =
+    given Writes[SlackNotificationRequest] = SlackNotificationsFormats.snreqWrites
+    given Reads[SlackNotificationResponse] = SlackNotificationsFormats.snresReads
     httpClientV2
       .post(url"$url/slack-notifications/v2/notification")
       .withBody(Json.toJson(message))
       .setHeader("Authorization" -> slackNotifiactionsConfig.authToken)
       .setHeader("Content-type"  -> "application/json")
       .execute[SlackNotificationResponse]
-  }
-}
 
-object SlackNotificationsFormats {
+object SlackNotificationsFormats:
 
-  val snreqWrites: OWrites[SlackNotificationRequest] = {
-    implicit val clWrites: Writes[ChannelLookup] = Writes {
+  val snreqWrites: Writes[SlackNotificationRequest] =
+    given Writes[ChannelLookup] = Writes {
       case s: OwningTeams   => Json.toJson(s)(Json.writes[OwningTeams])
       case s: SlackChannels => Json.toJson(s)(Json.writes[SlackChannels])
       case s: GithubTeam    => Json.toJson(s)(Json.writes[GithubTeam])
     }
 
-    Json.writes[SlackNotificationRequest]
-  }
+    ( (__ \ "channelLookup").write[ChannelLookup]
+    ~ (__ \ "displayName"  ).write[String]
+    ~ (__ \ "emoji"        ).write[String]
+    ~ (__ \ "text"         ).write[String]
+    ~ (__ \ "blocks"       ).write[Seq[JsValue]]
+    )(o => Tuple.fromProductTyped(o))
 
-  val snresReads: Reads[SlackNotificationResponse] = {
-    implicit val sneReads: Reads[SlackNotificationError] =
+  val snresReads: Reads[SlackNotificationResponse] =
+    given Reads[SlackNotificationError] =
       ( (__ \ "code"   ).read[String]
       ~ (__ \ "message").read[String]
-      )(SlackNotificationError.apply _)
+      )(SlackNotificationError.apply)
 
     (__ \ "errors")
       .readWithDefault[List[SlackNotificationError]](List.empty)
       .map(SlackNotificationResponse.apply)
-  }
-}
 
-final case class SlackNotificationError(
+case class SlackNotificationError(
   code   : String,
   message: String
 )
 
-final case class SlackNotificationResponse(
+case class SlackNotificationResponse(
   errors: List[SlackNotificationError]
 )
 
 sealed trait ChannelLookup { def by: String }
 
-final case class GithubTeam(
+case class GithubTeam(
   teamName: String,
   by      : String = "github-team"
 ) extends ChannelLookup
 
-final case class OwningTeams(
+case class OwningTeams(
   repositoryName: String,
   by            : String = "github-repository"
 ) extends ChannelLookup
 
-final case class SlackChannels(
+case class SlackChannels(
   slackChannels: Seq[String],
   by           : String = "slack-channel"
 ) extends ChannelLookup
 
-final case class SlackNotificationRequest(
+case class SlackNotificationRequest(
   channelLookup: ChannelLookup,
   displayName  : String,
   emoji        : String,
@@ -108,13 +107,14 @@ final case class SlackNotificationRequest(
   blocks       : Seq[JsValue]
 )
 
-object SlackNotificationRequest {
+object SlackNotificationRequest:
   def toBlocks(messages: Seq[String]): Seq[JsValue] =
-    Json.parse("""{"type": "divider"}"""") +: messages.map(message => Json.parse(s"""{
-        "type": "section",
-        "text": {
-          "type": "mrkdwn",
-          "text": "${message.replace("\n","\\n")}"
-        }
-      }"""))
-}
+    Json.parse("""{"type": "divider"}"""") +:
+      messages.map: message =>
+        Json.parse(s"""{
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "${message.replace("\n","\\n")}"
+          }
+        }""")

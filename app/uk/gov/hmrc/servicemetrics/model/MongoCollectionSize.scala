@@ -17,7 +17,7 @@
 package uk.gov.hmrc.servicemetrics.model
 
 import play.api.libs.functional.syntax.toFunctionalBuilderOps
-import play.api.libs.json.{OFormat, Writes, __}
+import play.api.libs.json.{Format, Writes, __}
 import uk.gov.hmrc.mongo.play.json.formats.MongoJavatimeFormats
 
 import java.time.LocalDate
@@ -31,27 +31,22 @@ case class MongoCollectionSize(
 , service     : String
 )
 
-object MongoCollectionSize {
-  val mongoFormat: OFormat[MongoCollectionSize] = {
-    implicit val envf = Environment.format
-    import MongoJavatimeFormats.Implicits._
+object MongoCollectionSize:
+
+  val mongoFormat: Format[MongoCollectionSize] =
     ( (__ \ "database"   ).format[String]
     ~ (__ \ "collection" ).format[String]
     ~ (__ \ "sizeBytes"  ).format[BigDecimal]
-    ~ (__ \ "date"       ).format[LocalDate]
-    ~ (__ \ "environment").format[Environment]
+    ~ (__ \ "date"       ).format[LocalDate](MongoJavatimeFormats.localDateFormat)
+    ~ (__ \ "environment").format[Environment](Environment.format)
     ~ (__ \ "service"    ).format[String]
     )(apply, o => Tuple.fromProductTyped(o))
-  }
 
-  val apiWrites: Writes[MongoCollectionSize] = {
-    implicit val envf = Environment.format
+  val apiWrites: Writes[MongoCollectionSize] =
     ( (__ \ "database"   ).write[String]
     ~ (__ \ "collection" ).write[String]
     ~ (__ \ "sizeBytes"  ).write[BigDecimal]
     ~ (__ \ "date"       ).write[LocalDate]
-    ~ (__ \ "environment").write[Environment]
+    ~ (__ \ "environment").write[Environment](Environment.format)
     ~ (__ \ "service"    ).write[String]
     )(o => Tuple.fromProductTyped(o))
-  }
-}

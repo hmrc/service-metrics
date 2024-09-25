@@ -21,16 +21,13 @@ import play.api.mvc.QueryStringBindable
 import java.time.Instant
 import scala.util.Try
 
-object Binders {
+object Binders:
 
   implicit def instantBindable(implicit strBinder: QueryStringBindable[String]): QueryStringBindable[Instant] =
-    new QueryStringBindable[Instant] {
+    new QueryStringBindable[Instant]:
       override def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, Instant]] =
         strBinder.bind(key, params)
           .map(_.flatMap(s => Try(Instant.parse(s)).toEither.left.map(_.getMessage)))
 
       override def unbind(key: String, value: Instant): String =
         strBinder.unbind(key, value.toString)
-    }
-}
-

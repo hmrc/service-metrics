@@ -37,18 +37,19 @@ class TeamsAndRepositoriesConnectorSpec
      with IntegrationPatience
      with HttpClientV2Support
      with WireMockSupport
-     with MockitoSugar {
+     with MockitoSugar:
 
-  private implicit val hc: HeaderCarrier = HeaderCarrier()
+  given HeaderCarrier = HeaderCarrier()
 
   private val mockConfig: ServicesConfig = mock[ServicesConfig]
 
-  when(mockConfig.baseUrl(any[String])).thenReturn(wireMockUrl)
+  when(mockConfig.baseUrl(any[String]))
+    .thenReturn(wireMockUrl)
 
-  private val connector = new TeamsAndRepositoriesConnector(httpClientV2, mockConfig)
+  private val connector = TeamsAndRepositoriesConnector(httpClientV2, mockConfig)
 
-  "allServices" should {
-    "return list of service names" in {
+  "allServices" should:
+    "return list of service names" in:
 
       val rawResponse =
         """
@@ -99,14 +100,12 @@ class TeamsAndRepositoriesConnectorSpec
           |  }
           |]""".stripMargin
 
-      stubFor(
+      stubFor:
         get(urlEqualTo("/api/v2/repositories?repoType=service"))
-          .willReturn(
+          .willReturn:
             aResponse()
               .withStatus(200)
               .withBody(rawResponse)
-          )
-      )
 
       val expected = Seq(
         Service(
@@ -122,9 +121,3 @@ class TeamsAndRepositoriesConnectorSpec
       val response = connector.allServices().futureValue
 
       response should contain theSameElementsAs expected
-    }
-  }
-
-
-
-}

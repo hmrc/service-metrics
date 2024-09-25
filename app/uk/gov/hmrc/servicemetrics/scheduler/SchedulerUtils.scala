@@ -24,45 +24,50 @@ import uk.gov.hmrc.servicemetrics.config.SchedulerConfig
 
 import scala.concurrent.{ExecutionContext, Future}
 
-trait SchedulerUtils {
+trait SchedulerUtils:
   val logger: Logger
 
   def schedule(
-      label          : String
-    , schedulerConfig: SchedulerConfig
-    )(f: => Future[Unit]
-    )(implicit actorSystem: ActorSystem, applicationLifecycle: ApplicationLifecycle, ec: ExecutionContext) =
-      if (schedulerConfig.enabled) {
+    label          : String
+  , schedulerConfig: SchedulerConfig
+  )(
+    f: => Future[Unit]
+  )(using
+    actorSystem         : ActorSystem,
+    applicationLifecycle: ApplicationLifecycle,
+    ec                  : ExecutionContext
+  ) =
+      if schedulerConfig.enabled then
         val initialDelay = schedulerConfig.initialDelay
         val interval     = schedulerConfig.interval
         logger.info(s"Enabling $label scheduler, running every $interval (after initial delay $initialDelay)")
         val cancellable =
-          actorSystem.scheduler.scheduleWithFixedDelay(initialDelay, interval){ () =>
+          actorSystem.scheduler.scheduleWithFixedDelay(initialDelay, interval): () =>
             val start = System.currentTimeMillis
             logger.info(s"Scheduler $label started")
             f.map { res =>
               logger.info(s"Scheduler $label finished - took ${System.currentTimeMillis - start} millis")
               res
             }
-            .recover {
+            .recover:
               case e => logger.error(s"$label interrupted after ${System.currentTimeMillis - start} millis because: ${e.getMessage}", e)
-            }
-          }
 
         applicationLifecycle.addStopHook(() => Future.successful(cancellable.cancel()))
-      } else
+      else
         logger.info(s"$label scheduler is DISABLED. to enable, configure configure ${schedulerConfig.enabledKey}=true in config.")
 
   def scheduleWithLock(
-      label          : String
-    , schedulerConfig: SchedulerConfig
-    , lock           : LockService
-    )(f: => Future[Unit]
-    )(implicit actorSystem: ActorSystem, applicationLifecycle: ApplicationLifecycle, ec: ExecutionContext) =
-      schedule(label, schedulerConfig) {
-        lock.withLock(f).map {
+    label          : String
+  , schedulerConfig: SchedulerConfig
+  , lock           : LockService
+  )(
+    f: => Future[Unit]
+  )(using
+    ActorSystem,
+    ApplicationLifecycle,
+    ExecutionContext
+  ) =
+      schedule(label, schedulerConfig):
+        lock.withLock(f).map:
           case Some(_) => logger.debug(s"$label finished - releasing lock")
           case None    => logger.debug(s"$label cannot run - lock ${lock.lockId} is taken... skipping update")
-        }
-    }
-}
