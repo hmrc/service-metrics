@@ -37,7 +37,6 @@ class GitHubProxyConnectorSpec
   with HttpClientV2Support
   with WireMockSupport {
 
-
     private lazy val gitHubProxyConnector =
       new GitHubProxyConnector(
         httpClientV2   = httpClientV2,
@@ -101,4 +100,3 @@ class GitHubProxyConnectorSpec
     }
   }
 }
-

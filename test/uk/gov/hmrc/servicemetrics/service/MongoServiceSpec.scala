@@ -16,13 +16,15 @@
 
 package uk.gov.hmrc.servicemetrics.service
 
+import org.mockito.ArgumentMatchers.{any, same}
+import org.mockito.Mockito.{times, verify, verifyNoInteractions, when}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import uk.gov.hmrc.servicemetrics.connector._
-import org.mockito.scalatest.MockitoSugar
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.config.AppConfig
+import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.{Service, ServiceName}
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
@@ -75,7 +77,7 @@ class MongoServiceSpec
       service.updateCollectionSizes(Environment.QA).failed.futureValue shouldBe a[RuntimeException]
 
       verify(mockClickHouseConnector, times(1)).getDatabaseNames(Environment.QA)(hc)
-      verifyZeroInteractions(mockLatestRepository)
+      verifyNoInteractions(mockLatestRepository)
     }
   }
 
@@ -130,7 +132,7 @@ class MongoServiceSpec
         verify(mockGitHubProxyConnector, times(1)).getMongoOverrides(Environment.QA)(hc)
         verify(mockElasticsearchConnector, times(1)).getSlowQueries(same(Environment.QA), same("service-one"), any[Instant], any[Instant])(same(hc))
         verify(mockElasticsearchConnector, times(1)).getNonIndexedQueries(same(Environment.QA), same("service-one"), any[Instant], any[Instant])(same(hc))
-        verify(mockQueryLogHistoryRepository, times(1)).insertMany(anySeq[MongoQueryLogHistoryRepository.MongoQueryLogHistory])
+        verify(mockQueryLogHistoryRepository, times(1)).insertMany(any[Seq[MongoQueryLogHistoryRepository.MongoQueryLogHistory]])
       }
     }
   }
@@ -142,7 +144,7 @@ class MongoServiceSpec
       when(mockHistoryRepository.historyExists(any[Environment], any[LocalDate]))
         .thenReturn(Future.successful(false))
 
-      when(mockHistoryRepository.insertMany(anySeq[MongoCollectionSize]))
+      when(mockHistoryRepository.insertMany(any[Seq[MongoCollectionSize]]))
         .thenReturn(Future.unit)
 
       val mcs = Seq(MongoCollectionSize("database", "collection", BigDecimal(1000), LocalDate.now(), Environment.QA, "service"))

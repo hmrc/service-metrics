@@ -16,12 +16,13 @@
 
 package uk.gov.hmrc.servicemetrics.connector
 
-
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, get, stubFor, urlEqualTo}
-import org.mockito.scalatest.MockitoSugar
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.when
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
@@ -30,13 +31,13 @@ import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.{Servi
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class TeamsAndRepositoriesConnectorSpec
-extends AnyWordSpec
-with Matchers
-with ScalaFutures
-with IntegrationPatience
-with HttpClientV2Support
-with WireMockSupport
-with MockitoSugar {
+  extends AnyWordSpec
+     with Matchers
+     with ScalaFutures
+     with IntegrationPatience
+     with HttpClientV2Support
+     with WireMockSupport
+     with MockitoSugar {
 
   private implicit val hc: HeaderCarrier = HeaderCarrier()
 
@@ -111,7 +112,7 @@ with MockitoSugar {
         Service(
           ServiceName("service-one"),
           Seq("Team One")
-        ), 
+        ),
         Service(
           ServiceName("service-two"),
           Seq("Team Two")

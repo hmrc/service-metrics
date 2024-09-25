@@ -18,12 +18,13 @@ package uk.gov.hmrc.servicemetrics.scheduler
 
 import org.apache.pekko.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
-import org.mockito.MockitoSugar
-import org.mockito.ArgumentMatchers._
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{times, verify, when}
 import org.scalacheck.Gen
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatestplus.mockito.MockitoSugar
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
@@ -45,7 +46,7 @@ class MongoNotificationsSchedulerSpec
   extends AnyWordSpec
   with Matchers
   with ScalaFutures
-  with MockitoSugar 
+  with MockitoSugar
   with IntegrationPatience
   with ScalaCheckPropertyChecks {
 
@@ -75,7 +76,7 @@ class MongoNotificationsSchedulerSpec
         scheduler.notifyPerEnvironment(
           env,
           from,
-          to  
+          to
         ).futureValue
 
         verify(mockMongoService, times(1)).getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
@@ -93,7 +94,7 @@ class MongoNotificationsSchedulerSpec
         scheduler.notifyPerEnvironment(
           env,
           from,
-          to  
+          to
         ).futureValue
 
         verify(mockMongoService, times(1)).getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
@@ -124,7 +125,7 @@ class MongoNotificationsSchedulerSpec
         scheduler.notifyPerEnvironment(
           env,
           from,
-          to  
+          to
         ).futureValue
 
         verify(mockMongoService, times(1)).getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
@@ -157,13 +158,13 @@ class MongoNotificationsSchedulerSpec
         scheduler.notifyPerEnvironment(
           env,
           from,
-          to  
+          to
         ).futureValue
 
         verify(mockMongoService, times(1)).getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
         verify(mockMongoService, times(1)).hasBeenNotified(any[String])
         verify(mockSlackNotificationsConnector, times(0)).sendMessage(any[SlackNotificationRequest])
-        
+
       }
       "there is no notification channels" in new MongoNotificationsSchedulerFixture(
         areNotificationEnabled = true,
@@ -191,13 +192,13 @@ class MongoNotificationsSchedulerSpec
         scheduler.notifyPerEnvironment(
           env,
           from,
-          to  
+          to
         ).futureValue
 
         verify(mockMongoService, times(1)).getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
         verify(mockMongoService, times(1)).hasBeenNotified(any[String])
         verify(mockSlackNotificationsConnector, times(1)).sendMessage(any[SlackNotificationRequest])
-        
+
       }
     }
 
@@ -301,7 +302,7 @@ class MongoNotificationsSchedulerSpec
 
     when(mockMongoService.flagAsNotified(any[Seq[MongoQueryNotificationRepository.MongoQueryNotification]]))
       .thenReturn(Future.unit)
-    
+
     when(mockSlackNotificationsConnector.sendMessage(any[SlackNotificationRequest]))
       .thenReturn(Future.successful(SlackNotificationResponse(List.empty)))
   }
