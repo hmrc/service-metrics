@@ -30,21 +30,24 @@ import scala.concurrent.{ExecutionContext, Future}
 class GitHubProxyConnector @Inject()(
   httpClientV2  : HttpClientV2
 , servicesConfig: ServicesConfig
-)(implicit ec: ExecutionContext) {
-  private val gitHubProxyBaseURL: String = servicesConfig.baseUrl("platops-github-proxy")
+)(using ExecutionContext):
 
-  def getMongoOverrides(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[DbOverride]] =
+  private val gitHubProxyBaseURL: String =
+    servicesConfig.baseUrl("platops-github-proxy")
+
+  def getMongoOverrides(environment: Environment)(using HeaderCarrier): Future[Seq[DbOverride]] =
     httpClientV2
       .get(url"$gitHubProxyBaseURL/platops-github-proxy/github-raw/vault-policy-definitions-${environment.asString}/main/db-overrides.json")
       .execute[Map[String, Seq[JsObject]]]
-      .map(
+      .map:
         _
-          .flatMap { case (k, vs) =>
+          .flatMap: (k, vs) =>
             vs.map(v => DbOverride(k, (v \ "dbs").as[Seq[String]]))
-          }.toSeq
-      )
-}
+          .toSeq
 
-object GitHubProxyConnector {
-  case class DbOverride(service: String, dbs: Seq[String])
-}
+object GitHubProxyConnector:
+
+  case class DbOverride(
+    service: String,
+    dbs    : Seq[String]
+  )

@@ -17,10 +17,12 @@
 package uk.gov.hmrc.servicemetrics.connector
 
 import com.github.tomakehurst.wiremock.client.WireMock._
-import org.mockito.scalatest.MockitoSugar
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.when
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
@@ -37,58 +39,54 @@ class CarbonApiConnectorSpec
     with IntegrationPatience
     with HttpClientV2Support
     with WireMockSupport
-    with MockitoSugar {
+    with MockitoSugar:
 
-  private implicit val hc: HeaderCarrier = HeaderCarrier()
+  private given HeaderCarrier = HeaderCarrier()
 
   private val mockConfig: ServicesConfig = mock[ServicesConfig]
 
-  when(mockConfig.baseUrl(any[String])).thenReturn(wireMockUrl)
+  when(mockConfig.baseUrl(any[String]))
+    .thenReturn(wireMockUrl)
 
-  val connector = new CarbonApiConnector(httpClientV2, mockConfig)
+  val connector = CarbonApiConnector(httpClientV2, mockConfig)
 
-  "getMongoMetrics" should {
-    "return mongo metrics" in {
-
-      val rawResponse =
-        """
-          |[
-          |  {
-          |    "target": "mongo-service-one-collection-one",
-          |    "datapoints": [
-          |      [
-          |        1676590,
-          |        1675606800
-          |      ]
-          |    ],
-          |    "tags": {
-          |      "aggregatedBy": "max",
-          |      "name": "mongo-service-one-collection-one"
-          |    }
-          |  },
-          |  {
-          |    "target": "mongo-service-one-collection-two",
-          |    "datapoints": [
-          |      [
-          |        79688835,
-          |        1675606800
-          |      ]
-          |    ],
-          |    "tags": {
-          |      "aggregatedBy": "max",
-          |      "name": "mongo-service-one-collection-two"
-          |    }
-          |  }
-          |]""".stripMargin
-
-      stubFor(
+  "getMongoMetrics" should:
+    "return mongo metrics" in:
+      stubFor:
         get(urlPathEqualTo("/render"))
-          .willReturn(
+          .willReturn:
             aResponse()
               .withStatus(200)
-              .withBody(rawResponse)
-          )
-      )
+              .withBody("""
+                [
+                  {
+                    "target": "mongo-service-one-collection-one",
+                    "datapoints": [
+                      [
+                        1676590,
+                        1675606800
+                      ]
+                    ],
+                    "tags": {
+                      "aggregatedBy": "max",
+                      "name": "mongo-service-one-collection-one"
+                    }
+                  },
+                  {
+                    "target": "mongo-service-one-collection-two",
+                    "datapoints": [
+                      [
+                        79688835,
+                        1675606800
+                      ]
+                    ],
+                    "tags": {
+                      "aggregatedBy": "max",
+                      "name": "mongo-service-one-collection-two"
+                    }
+                  }
+                ]"""
+              )
 
       val expected = Seq(
         MongoCollectionSizeMetric(
@@ -106,6 +104,3 @@ class CarbonApiConnectorSpec
       val response = connector.getCollectionSizes(Environment.QA, "service-one").futureValue
 
       response should contain theSameElementsAs expected
-    }
-  }
-}

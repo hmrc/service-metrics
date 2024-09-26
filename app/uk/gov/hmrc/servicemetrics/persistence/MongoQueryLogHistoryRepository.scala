@@ -16,13 +16,13 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
+import org.mongodb.scala.ObservableFuture
 import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes, Sorts}
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import uk.gov.hmrc.mongo.MongoComponent
-import uk.gov.hmrc.mongo.play.json.Codecs
+import uk.gov.hmrc.mongo.play.json.{Codecs, PlayMongoRepository}
 import uk.gov.hmrc.mongo.play.json.formats.MongoJavatimeFormats
-import uk.gov.hmrc.mongo.play.json.PlayMongoRepository
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
@@ -35,11 +35,11 @@ import MongoQueryLogHistoryRepository._
 @Singleton
 class MongoQueryLogHistoryRepository @Inject()(
   mongoComponent: MongoComponent
-)(implicit
-  ec: ExecutionContext
+)(using
+  ExecutionContext
 ) extends PlayMongoRepository(
   mongoComponent = mongoComponent,
-  collectionName = MongoQueryLogHistoryRepository.collectionName,
+  collectionName = "mongoQueryLogHistory",
   domainFormat   = MongoQueryLogHistory.format,
   indexes        = Seq(
                      IndexModel(Indexes.ascending("service")),
@@ -49,7 +49,7 @@ class MongoQueryLogHistoryRepository @Inject()(
                      IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(90, TimeUnit.DAYS)),
                    ),
   extraCodecs    = Seq(Codecs.playFormatCodec(MongoQueryType.format))
-) {
+):
 
   def getQueryTypesByService(
     service    : String,
@@ -107,26 +107,22 @@ class MongoQueryLogHistoryRepository @Inject()(
       .limit(1)
       .map(_.timestamp)
       .headOption()
-}
 
-object MongoQueryLogHistoryRepository {
-  val collectionName = "mongoQueryLogHistory"
-
-  final case class NonPerformantQueryDetails(
+object MongoQueryLogHistoryRepository:
+  case class NonPerformantQueryDetails(
     collection : String,
     duration   : Int,
     occurrences: Int
   )
 
-  object NonPerformantQueryDetails {
+  object NonPerformantQueryDetails:
     val format: Format[NonPerformantQueryDetails] =
       ( (__ \ "collection").format[String]
       ~ (__ \ "duration"  ).format[Int]
       ~ (__ \ "occurences").format[Int]
-      )(NonPerformantQueryDetails.apply _, unlift(NonPerformantQueryDetails.unapply _))
-  }
+      )(NonPerformantQueryDetails.apply, o => Tuple.fromProductTyped(o))
 
-  final case class MongoQueryLogHistory(
+  case class MongoQueryLogHistory(
     timestamp  : Instant,
     since      : Instant,
     database   : String,
@@ -137,10 +133,10 @@ object MongoQueryLogHistoryRepository {
     teams      : Seq[String],
   )
 
-  object MongoQueryLogHistory {
-    private implicit val instantFormat: Format[Instant] = MongoJavatimeFormats.instantFormat
-    private implicit val npqdF: Format[NonPerformantQueryDetails] = NonPerformantQueryDetails.format
+  object MongoQueryLogHistory :
     val format: Format[MongoQueryLogHistory] =
+      given Format[Instant]                   = MongoJavatimeFormats.instantFormat
+      given Format[NonPerformantQueryDetails] = NonPerformantQueryDetails.format
       ( (__ \ "timestamp"  ).format[Instant]
       ~ (__ \ "since"      ).format[Instant]
       ~ (__ \ "database"   ).format[String]
@@ -149,41 +145,31 @@ object MongoQueryLogHistoryRepository {
       ~ (__ \ "details"    ).format[Seq[NonPerformantQueryDetails]]
       ~ (__ \ "environment").format[Environment](Environment.format)
       ~ (__ \ "teams"      ).format[Seq[String]]
-      )(MongoQueryLogHistory.apply _, unlift(MongoQueryLogHistory.unapply _))
-  }
+      )(MongoQueryLogHistory.apply, o => Tuple.fromProductTyped(o))
 
-  sealed trait MongoQueryType { val value: String }
+  enum MongoQueryType(val value: String):
+    case SlowQuery       extends MongoQueryType("Slow Running Query")
+    case NonIndexedQuery extends MongoQueryType("Non-indexed Collection Query")
 
-  object MongoQueryType {
-    case object SlowQuery extends MongoQueryType       { val value: String = "Slow Running Query" }
-    case object NonIndexedQuery extends MongoQueryType { val value: String = "Non-indexed Collection Query" }
+  object MongoQueryType:
+    val format: Format[MongoQueryType] =
+      new Format[MongoQueryType]:
+        override def writes(o: MongoQueryType): JsValue = JsString(o.value)
+        override def reads(json: JsValue): JsResult[MongoQueryType] =
+          json.validate[String]
+            .flatMap: s =>
+              values.find(_.value == s).fold(JsError("Invalid MongoDb query type"))(JsSuccess(_))
 
-    case class OtherQuery(val value: String) extends MongoQueryType
-
-    val values: Seq[MongoQueryType] = Seq(SlowQuery, NonIndexedQuery)
-    val format: Format[MongoQueryType] = new Format[MongoQueryType] {
-      override def writes(o: MongoQueryType): JsValue = JsString(o.value)
-      override def reads(json: JsValue): JsResult[MongoQueryType] =
-        json.validate[String]
-          .flatMap(s =>
-            MongoQueryType.values.find(_.value == s)
-              .map(e => JsSuccess(e)).getOrElse(JsError("Invalid MongoDb query type"))
-          )
-    }
-  }
-
-  final case class NonPerformantQueries(
+  case class NonPerformantQueries(
     service    : String,
     environment: Environment,
-    queryTypes : Seq[MongoQueryType],
+    queryTypes : Seq[MongoQueryType]
   )
 
-  object NonPerformantQueries{
-    private implicit val mqtFormat: Format[MongoQueryType] = MongoQueryType.format
+  object NonPerformantQueries:
     val format: Format[NonPerformantQueries] =
+      given Format[MongoQueryType] = MongoQueryType.format
       ( (__ \ "service"    ).format[String]
       ~ (__ \ "environment").format[Environment](Environment.format)
       ~ (__ \ "queryTypes" ).format[Seq[MongoQueryType]]
-      )(NonPerformantQueries.apply _, unlift(NonPerformantQueries.unapply _))
-  }
-}
+      )(NonPerformantQueries.apply, o => Tuple.fromProductTyped(o))

@@ -16,7 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
-import org.mongodb.scala.bson.BsonDocument
+import org.mongodb.scala.ObservableFuture
 import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
 import uk.gov.hmrc.mongo.MongoComponent
 import uk.gov.hmrc.mongo.play.json.PlayMongoRepository
@@ -30,21 +30,35 @@ import scala.concurrent.{ExecutionContext, Future}
 @Singleton
 class MongoCollectionSizeHistoryRepository @Inject()(
   mongoComponent: MongoComponent
-)(implicit
-  ec: ExecutionContext
+)(using
+  ExecutionContext
 ) extends PlayMongoRepository(
   mongoComponent = mongoComponent,
-  collectionName = MongoCollectionSizeHistoryRepository.collectionName,
+  collectionName = "mongoCollectionSizesHistory",
   domainFormat   = MongoCollectionSize.mongoFormat,
-  indexes        = MongoCollectionSizeHistoryRepository.indexes
-) {
+  indexes        = Seq(
+                     IndexModel(Indexes.ascending("service")),
+                     IndexModel(Indexes.ascending("environment")),
+                     IndexModel(Indexes.ascending("date"), IndexOptions().expireAfter(90, TimeUnit.DAYS)),
+                     // ensure only one datapoint per collection per day is stored
+                     IndexModel(
+                       Indexes.compoundIndex(
+                         Indexes.ascending("service"), // multiple services can share the same database
+                         Indexes.ascending("database"),
+                         Indexes.ascending("collection"),
+                         Indexes.ascending("environment"),
+                         Indexes.ascending("date")
+                       ),
+                       IndexOptions().unique(true).background(true)
+                     )
+                   )
+):
 
   def find(
     service    : Option[String]      = None,
     environment: Option[Environment] = None,
     date       : Option[LocalDate]   = None
-  ): Future[Seq[MongoCollectionSize]] = {
-
+  ): Future[Seq[MongoCollectionSize]] =
     val filters = Seq(
       service.map(s => Filters.equal("service", s)),
       environment.map(env => Filters.equal("environment", env.asString)),
@@ -52,12 +66,10 @@ class MongoCollectionSizeHistoryRepository @Inject()(
     ).flatten
 
     collection.find(
-      filter = if (filters.isEmpty) BsonDocument() else Filters.and(filters: _*)
+      filter = if (filters.isEmpty) Filters.empty else Filters.and(filters: _*)
     ).toFuture()
 
-  }
-
-  def historyExists(environment: Environment, afterDate: LocalDate): Future[Boolean] = {
+  def historyExists(environment: Environment, afterDate: LocalDate): Future[Boolean] =
     collection
       .find(
         Filters.and(
@@ -68,30 +80,6 @@ class MongoCollectionSizeHistoryRepository @Inject()(
       .limit(1)
       .toFuture()
       .map(_.nonEmpty)
-  }
 
   def insertMany(mcs: Seq[MongoCollectionSize]): Future[Unit] =
     collection.insertMany(mcs).toFuture().map(_ => ())
-}
-
-object MongoCollectionSizeHistoryRepository {
-  val collectionName = "mongoCollectionSizesHistory"
-
-  val indexes: Seq[IndexModel] =
-    Seq(
-      IndexModel(Indexes.ascending("service")),
-      IndexModel(Indexes.ascending("environment")),
-      IndexModel(Indexes.ascending("date"), IndexOptions().expireAfter(90, TimeUnit.DAYS)),
-      // ensure only one datapoint per collection per day is stored
-      IndexModel(
-        Indexes.compoundIndex(
-          Indexes.ascending("service"), // multiple services can share the same database
-          Indexes.ascending("database"),
-          Indexes.ascending("collection"),
-          Indexes.ascending("environment"),
-          Indexes.ascending("date")
-        ),
-        IndexOptions().unique(true).background(true)
-      )
-    )
-}

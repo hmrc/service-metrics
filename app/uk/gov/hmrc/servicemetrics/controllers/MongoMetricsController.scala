@@ -29,30 +29,29 @@ import scala.concurrent.ExecutionContext
 
 @Singleton()
 class MongoMetricsController @Inject()(
-cc: ControllerComponents
+  cc                : ControllerComponents
 , mongoMetricService: MongoService
-)(implicit
-  ec: ExecutionContext
-) extends BackendController(cc) {
+)(using
+  ExecutionContext
+) extends BackendController(cc):
 
   def getCollections(service: String, environment: Option[Environment]): Action[AnyContent] =
-    Action.async {
-      implicit val writes: Writes[MongoCollectionSize] = MongoCollectionSize.apiWrites
+    Action.async:
+      given Writes[MongoCollectionSize] = MongoCollectionSize.apiWrites
       mongoMetricService.getCollections(service, environment)
         .map(mcs => Ok(Json.toJson(mcs)))
-    }
 
   def nonPerformantQueriesByService(
     service    : String,
     from       : Instant,
-    to         : Instant,
+    to         : Instant
   ): Action[AnyContent] =
-    Action.async {
-      implicit val writes: Writes[NonPerformantQueries] = NonPerformantQueries.format
-      mongoMetricService.nonPerformantQueriesByService(
+    Action.async:
+      given Writes[NonPerformantQueries] = NonPerformantQueries.format
+      mongoMetricService
+        .nonPerformantQueriesByService(
           service,
           from,
           to
-        ).map(nonPerformantQueries => Ok(Json.toJson(nonPerformantQueries)))
-    }
-}
+        )
+        .map(nonPerformantQueries => Ok(Json.toJson(nonPerformantQueries)))

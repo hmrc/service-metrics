@@ -16,12 +16,13 @@
 
 package uk.gov.hmrc.servicemetrics.connector
 
-
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, get, stubFor, urlEqualTo}
-import org.mockito.scalatest.MockitoSugar
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.when
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
@@ -30,88 +31,84 @@ import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.{Servi
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class TeamsAndRepositoriesConnectorSpec
-extends AnyWordSpec
-with Matchers
-with ScalaFutures
-with IntegrationPatience
-with HttpClientV2Support
-with WireMockSupport
-with MockitoSugar {
+  extends AnyWordSpec
+     with Matchers
+     with ScalaFutures
+     with IntegrationPatience
+     with HttpClientV2Support
+     with WireMockSupport
+     with MockitoSugar:
 
-  private implicit val hc: HeaderCarrier = HeaderCarrier()
+  given HeaderCarrier = HeaderCarrier()
 
   private val mockConfig: ServicesConfig = mock[ServicesConfig]
 
-  when(mockConfig.baseUrl(any[String])).thenReturn(wireMockUrl)
+  when(mockConfig.baseUrl(any[String]))
+    .thenReturn(wireMockUrl)
 
-  private val connector = new TeamsAndRepositoriesConnector(httpClientV2, mockConfig)
+  private val connector = TeamsAndRepositoriesConnector(httpClientV2, mockConfig)
 
-  "allServices" should {
-    "return list of service names" in {
-
-      val rawResponse =
-        """
-          |[
-          |  {
-          |    "name": "service-one",
-          |    "description": "",
-          |    "url": "https://github.com/hmrc/service-one",
-          |    "createdDate": "2018-11-07T10:54:02Z",
-          |    "lastActiveDate": "2022-01-11T17:10:23Z",
-          |    "isPrivate": true,
-          |    "repoType": "Service",
-          |    "owningTeams": [],
-          |    "language": "HTML",
-          |    "isArchived": false,
-          |    "defaultBranch": "main",
-          |    "branchProtection": {
-          |      "requiresApprovingReviews": false,
-          |      "dismissesStaleReviews": false,
-          |      "requiresCommitSignatures": true
-          |    },
-          |    "isDeprecated": false,
-          |    "teamNames": [
-          |      "Team One"
-          |    ]
-          |  },
-          |  {
-          |    "name": "service-two",
-          |    "description": "",
-          |    "url": "https://github.com/hmrc/service-one",
-          |    "createdDate": "2019-10-10T15:13:50Z",
-          |    "lastActiveDate": "2020-11-20T08:51:39Z",
-          |    "isPrivate": true,
-          |    "repoType": "Service",
-          |    "owningTeams": [],
-          |    "language": "HTML",
-          |    "isArchived": false,
-          |    "defaultBranch": "main",
-          |    "branchProtection": {
-          |      "requiresApprovingReviews": false,
-          |      "dismissesStaleReviews": false,
-          |      "requiresCommitSignatures": true
-          |    },
-          |    "isDeprecated": false,
-          |    "teamNames": [
-          |      "Team Two"
-          |    ]
-          |  }
-          |]""".stripMargin
-
-      stubFor(
+  "allServices" should:
+    "return list of service names" in:
+      stubFor:
         get(urlEqualTo("/api/v2/repositories?repoType=service"))
-          .willReturn(
+          .willReturn:
             aResponse()
               .withStatus(200)
-              .withBody(rawResponse)
-          )
-      )
+              .withBody("""
+                [
+                  {
+                    "name": "service-one",
+                    "description": "",
+                    "url": "https://github.com/hmrc/service-one",
+                    "createdDate": "2018-11-07T10:54:02Z",
+                    "lastActiveDate": "2022-01-11T17:10:23Z",
+                    "isPrivate": true,
+                    "repoType": "Service",
+                    "owningTeams": [],
+                    "language": "HTML",
+                    "isArchived": false,
+                    "defaultBranch": "main",
+                    "branchProtection": {
+                      "requiresApprovingReviews": false,
+                      "dismissesStaleReviews": false,
+                      "requiresCommitSignatures": true
+                    },
+                    "isDeprecated": false,
+                    "teamNames": [
+                      "Team One"
+                    ]
+                  },
+                  {
+                    "name": "service-two",
+                    "description": "",
+                    "url": "https://github.com/hmrc/service-one",
+                    "createdDate": "2019-10-10T15:13:50Z",
+                    "lastActiveDate": "2020-11-20T08:51:39Z",
+                    "isPrivate": true,
+                    "repoType": "Service",
+                    "owningTeams": [],
+                    "language": "HTML",
+                    "isArchived": false,
+                    "defaultBranch": "main",
+                    "branchProtection": {
+                      "requiresApprovingReviews": false,
+                      "dismissesStaleReviews": false,
+                      "requiresCommitSignatures": true
+                    },
+                    "isDeprecated": false,
+                    "teamNames": [
+                      "Team Two"
+                    ]
+                  }
+                ]"""
+              )
 
       val expected = Seq(
         Service(
           ServiceName("service-one"),
           Seq("Team One")
-        ), 
+        ),
         Service(
           ServiceName("service-two"),
           Seq("Team Two")
@@ -121,9 +118,3 @@ with MockitoSugar {
       val response = connector.allServices().futureValue
 
       response should contain theSameElementsAs expected
-    }
-  }
-
-
-
-}

@@ -17,10 +17,11 @@
 package uk.gov.hmrc.servicemetrics.connector
 
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, get, stubFor, urlEqualTo}
-import org.mockito.scalatest.MockitoSugar
+import org.mockito.Mockito.when
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.servicemetrics.config.ClickHouseConfig
@@ -34,44 +35,37 @@ class ClickHouseConnectorSpec
      with ScalaFutures
      with HttpClientV2Support
      with WireMockSupport
-     with MockitoSugar {
+     with MockitoSugar:
 
-  private implicit val hc: HeaderCarrier = HeaderCarrier()
+  private given HeaderCarrier = HeaderCarrier()
 
   private val mockConfig = mock[ClickHouseConfig]
 
-  when(mockConfig.urls).thenReturn {
-    Environment.values
-      .filterNot(_ == Environment.Integration)
-      .map(env => env -> wireMockUrl)
-      .toMap
-  }
+  when(mockConfig.urls)
+    .thenReturn:
+      Environment.values
+        .filterNot(_ == Environment.Integration)
+        .map(env => env -> wireMockUrl)
+        .toMap
 
-  val connector = new ClickHouseConnector(httpClientV2, mockConfig)
+  val connector = ClickHouseConnector(httpClientV2, mockConfig)
 
-  "getDatabaseNames" should {
-    "return a list of database names" in {
-      val rawResponse =
-        """
-          |{
-          |  "name": ["database-one", "database-two", "database-three"]
-          |}
-          |""".stripMargin
-
-      stubFor(
+  "getDatabaseNames" should:
+    "return a list of database names" in:
+      stubFor:
         get(urlEqualTo("/latest/mongodbs"))
-          .willReturn(
+          .willReturn:
             aResponse()
               .withStatus(200)
-              .withBody(rawResponse)
-          )
-      )
+              .withBody("""
+                {
+                  "name": ["database-one", "database-two", "database-three"]
+                }
+                """
+              )
 
       val expected = Seq("database-one", "database-two", "database-three")
 
       val response = connector.getDatabaseNames(Environment.QA).futureValue
 
       response should contain theSameElementsAs expected
-    }
-  }
-}

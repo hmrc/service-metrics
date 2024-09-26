@@ -26,36 +26,37 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class MongoQueryLogHistoryRepositorySpec
   extends AnyWordSpec
-  with Matchers
-  with DefaultPlayMongoRepositorySupport[MongoQueryLogHistoryRepository.MongoQueryLogHistory] {
+     with Matchers
+     with DefaultPlayMongoRepositorySupport[MongoQueryLogHistoryRepository.MongoQueryLogHistory]:
 
-  override lazy val repository = new MongoQueryLogHistoryRepository(mongoComponent)
+  override val repository: MongoQueryLogHistoryRepository =
+    MongoQueryLogHistoryRepository(mongoComponent)
 
   private def seed(
-      env            : Environment,
-      mongoQueryTypes: Seq[MongoQueryLogHistoryRepository.MongoQueryType]
-    ) = mongoQueryTypes.map(queryType =>
-      MongoQueryLogHistoryRepository.MongoQueryLogHistory(
-        timestamp   = Instant.now,
-        since       = Instant.now.minusSeconds(20),
-        database    = "database",
-        details     = Seq(
-          MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
-            occurrences = 1,
-            collection  = "collection",
-            duration    = 3001,
-          )
-        ),
-        service     = "service",
-        queryType   = queryType,
-        environment = env,
-        teams       = Seq("team")
-      )
-    )
+    env            : Environment,
+    mongoQueryTypes: Seq[MongoQueryLogHistoryRepository.MongoQueryType]
+  ) =
+      mongoQueryTypes.map: queryType =>
+        MongoQueryLogHistoryRepository.MongoQueryLogHistory(
+          timestamp   = Instant.now(),
+          since       = Instant.now().minusSeconds(20),
+          database    = "database",
+          details     = Seq(
+            MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
+              occurrences = 1,
+              collection  = "collection",
+              duration    = 3001,
+            )
+          ),
+          service     = "service",
+          queryType   = queryType,
+          environment = env,
+          teams       = Seq("team")
+        )
 
-  "getAll" should {
-    "return results" when {
-      "there are non-performant queries for an environment" in {
+  "getAll" should:
+    "return results" when:
+      "there are non-performant queries for an environment" in:
         val environment = Environment.QA
 
         repository.insertMany(seed(
@@ -69,31 +70,25 @@ class MongoQueryLogHistoryRepositorySpec
             Instant.now().minusSeconds(10),
             Instant.now()
           ).futureValue should not be empty
-      }
-    }
-  }
 
-  "getQueryTypesByService" should {
-    "return results" when {
-      "there are non-performant queries for a service" in {
+  "getQueryTypesByService" should:
+    "return results" when:
+      "there are non-performant queries for a service" in:
         val expectedResult = MongoQueryLogHistoryRepository.NonPerformantQueries(
           "service",
           Environment.QA,
           Seq(
             MongoQueryLogHistoryRepository.MongoQueryType.NonIndexedQuery,
             MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
-          ),
+          )
         )
 
         repository.insertMany(seed(expectedResult.environment, expectedResult.queryTypes)).futureValue
 
-        repository.getQueryTypesByService(
+        repository
+          .getQueryTypesByService(
             expectedResult.service,
             Instant.now().minusSeconds(10),
             Instant.now()
           )
           .futureValue shouldBe List(expectedResult)
-      }
-    }
-  }
-}

@@ -22,10 +22,10 @@ import uk.gov.hmrc.servicemetrics.model.Environment
 import javax.inject.{Inject, Singleton}
 
 @Singleton
-class ClickHouseConfig @Inject()(configuration: Configuration) {
+class ClickHouseConfig @Inject()(configuration: Configuration):
+
   val urls: Map[Environment, String] =
     Environment.values
       .filterNot(_ == Environment.Integration)
       .map(env => env -> configuration.get[String](s"clickhouse.${env.asString}.url"))
       .toMap
-}

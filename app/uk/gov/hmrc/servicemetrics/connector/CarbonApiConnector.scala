@@ -31,17 +31,21 @@ import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class CarbonApiConnector @Inject()(
-  httpClientV2 : HttpClientV2
+  httpClientV2  : HttpClientV2
 , servicesConfig: ServicesConfig
-)(implicit
-  ec: ExecutionContext
-) {
+)(using
+  ExecutionContext
+):
+
   private val carbonApiBaseUrl: String = servicesConfig.baseUrl("carbon-api")
 
-  def getCollectionSizes(environment: Environment, database: String)(implicit hc: HeaderCarrier): Future[Seq[MongoCollectionSizeMetric]] = {
+  def getCollectionSizes(
+    environment: Environment,
+    database   : String
+  )(using HeaderCarrier): Future[Seq[MongoCollectionSizeMetric]] =
     val baseUrl = carbonApiBaseUrl.replace("$env", environment.asString)
 
-    implicit val mmr: Reads[MongoCollectionSizeMetric] = MongoCollectionSizeMetric.reads
+    given Reads[MongoCollectionSizeMetric] = MongoCollectionSizeMetric.reads
 
     val to   = Instant.now()
     val from = to.minusSeconds(3600)
@@ -49,21 +53,19 @@ class CarbonApiConnector @Inject()(
     httpClientV2
       .get(url"$baseUrl/render?target=groupByNode(collectd.*_mongo_*.mongo-$database-*.file_size-data,2,'max')&from=${from.getEpochSecond}&to=${to.getEpochSecond}&format=json&maxDataPoints=1")
       .execute[Seq[MongoCollectionSizeMetric]]
-  }
 
-}
-object CarbonApiConnector {
+object CarbonApiConnector:
+
   case class MongoCollectionSizeMetric(
     metricLabel: String,
     sizeBytes  : BigDecimal,
     timestamp  : Instant
   )
 
-  object MongoCollectionSizeMetric {
+  object MongoCollectionSizeMetric:
+
     val reads: Reads[MongoCollectionSizeMetric] =
-      ( (__ \ "target").read[String]
+      ( (__ \ "target"            ).read[String]
       ~ (__ \ "datapoints" \ 0 \ 0).read[BigDecimal]
       ~ (__ \ "datapoints" \ 0 \ 1).read[Long].map(Instant.ofEpochSecond)
-      )(apply _)
-  }
-}
+      )(apply)

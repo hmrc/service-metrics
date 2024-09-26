@@ -30,16 +30,12 @@ import scala.concurrent.{ExecutionContext, Future}
 class ClickHouseConnector @Inject()(
   httpClientV2: HttpClientV2
 , config      : ClickHouseConfig
-)(implicit
-  ec: ExecutionContext
-) {
+)(using
+  ExecutionContext
+):
 
-  def getDatabaseNames(environment: Environment)(implicit hc: HeaderCarrier): Future[Seq[String]] = {
-    val url = url"${config.urls(environment)}/latest/mongodbs"
-
+  def getDatabaseNames(environment: Environment)(using HeaderCarrier): Future[Seq[String]] =
     httpClientV2
-      .get(url)
+      .get(url"${config.urls(environment)}/latest/mongodbs")
       .execute[JsValue]
       .map(json => (json \ "name").as[Seq[String]])
-  }
-}

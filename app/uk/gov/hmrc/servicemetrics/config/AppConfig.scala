@@ -20,11 +20,7 @@ import javax.inject.{Inject, Singleton}
 import play.api.Configuration
 
 @Singleton
-class AppConfig @Inject()(config: Configuration) {
-
-  val appName: String =
-    config.get[String]("appName")
+class AppConfig @Inject()(config: Configuration):
 
   val collectionSizesHistoryFrequencyDays: Int =
     config.get[Int]("mongo-collection-size-history.frequency.days")
-}

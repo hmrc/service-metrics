@@ -27,19 +27,20 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class LatestMongoCollectionSizeRepositorySpec
   extends AnyWordSpec
   with Matchers
-  with DefaultPlayMongoRepositorySupport[MongoCollectionSize] {
+  with DefaultPlayMongoRepositorySupport[MongoCollectionSize]:
 
-  override lazy val repository = new LatestMongoCollectionSizeRepository(mongoComponent)
+  override val repository: LatestMongoCollectionSizeRepository =
+    LatestMongoCollectionSizeRepository(mongoComponent)
 
-  private def seed(env: Environment) = Seq(
-    MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now(), env, "service-one")
-  )
+  private def seed(env: Environment) =
+    Seq(
+      MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now(), env, "service-one")
+    )
 
-  "putAll" should {
-    "refresh data for a given environment" in {
-
-      repository.putAll(seed(Environment.QA), Environment.QA).futureValue
-      repository.putAll(seed(Environment.Staging), Environment.Staging).futureValue
+  "putAll" should:
+    "refresh data for a given environment" in:
+      repository.putAll(seed(Environment.QA        ), Environment.QA        ).futureValue
+      repository.putAll(seed(Environment.Staging   ), Environment.Staging   ).futureValue
       repository.putAll(seed(Environment.Production), Environment.Production).futureValue
 
       repository.find("service-one", Some(Environment.QA))
@@ -60,6 +61,3 @@ class LatestMongoCollectionSizeRepositorySpec
         .futureValue
         .headOption
         .map(_.sizeBytes) shouldBe Some(BigDecimal(2000))
-    }
-  }
-}

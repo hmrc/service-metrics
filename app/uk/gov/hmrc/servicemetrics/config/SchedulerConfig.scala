@@ -27,27 +27,28 @@ case class SchedulerConfig(
 , initialDelay : FiniteDuration
 )
 
-object SchedulerConfig {
+object SchedulerConfig:
   def apply(
     configuration   : Configuration
   , schedulerKey    : String
-  ): SchedulerConfig = {
+  ): SchedulerConfig =
     val enabledKey      = s"$schedulerKey.enabled"
     val intervalKey     = s"$schedulerKey.interval"
     val initialDelayKey = s"$schedulerKey.initialDelay"
     SchedulerConfig(
       enabledKey   = enabledKey
-      , enabled      = configuration.get[Boolean](enabledKey)
-      , interval     = configuration.get[FiniteDuration](intervalKey)
-      , initialDelay = configuration.get[FiniteDuration](initialDelayKey)
+    , enabled      = configuration.get[Boolean](enabledKey)
+    , interval     = configuration.get[FiniteDuration](intervalKey)
+    , initialDelay = configuration.get[FiniteDuration](initialDelayKey)
     )
-  }
-}
 
 @Singleton
-class SchedulerConfigs @Inject()(configuration: Configuration) {
-  val mongoMetricsScheduler       = SchedulerConfig(configuration, "mongo-metrics-scheduler")
-  val mongoNotificationsScheduler = SchedulerConfig(configuration, "mongo-notifications-scheduler")
+class SchedulerConfigs @Inject()(configuration: Configuration):
+  val mongoMetricsScheduler: SchedulerConfig =
+    SchedulerConfig(configuration, "mongo-metrics-scheduler")
 
-  val collectNonPerfomantQueriesEnabled = configuration.get[Boolean]("feature.collect-non-performant-queries-enabled")
-}
+  val mongoNotificationsScheduler: SchedulerConfig =
+    SchedulerConfig(configuration, "mongo-notifications-scheduler")
+
+  val collectNonPerfomantQueriesEnabled: Boolean =
+    configuration.get[Boolean]("feature.collect-non-performant-queries-enabled")

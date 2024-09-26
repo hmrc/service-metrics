@@ -26,28 +26,28 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class MongoCollectionSizeHistoryRepositorySpec
   extends AnyWordSpec
-  with Matchers
-  with DefaultPlayMongoRepositorySupport[MongoCollectionSize] {
+     with Matchers
+     with DefaultPlayMongoRepositorySupport[MongoCollectionSize]:
 
-  override lazy val repository = new MongoCollectionSizeHistoryRepository(mongoComponent)
+  override val repository: MongoCollectionSizeHistoryRepository =
+    MongoCollectionSizeHistoryRepository(mongoComponent)
 
-  private def seed(env: Environment) = Seq(
-    MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now(), env, "service-one")
-  )
+  private def seed(env: Environment) =
+    Seq(
+      MongoCollectionSize("service-one", "collection-one", BigDecimal(1000), LocalDate.now(), env, "service-one")
+   )
 
-  "insertMany" should {
-    "insert the records" in {
+  "insertMany" should:
+    "insert the records" in:
 
       repository.insertMany(seed(Environment.QA)).futureValue
 
       repository.find()
         .futureValue
         .length shouldBe 1
-    }
-  }
 
-  "find" should {
-    "find by date" in {
+  "find" should:
+    "find by date" in:
       repository.insertMany(seed(Environment.QA)).futureValue
       repository.insertMany(seed(Environment.QA).map(_.copy(date = LocalDate.now().minusDays(1)))).futureValue
 
@@ -58,22 +58,16 @@ class MongoCollectionSizeHistoryRepositorySpec
       repository.find(date = Some(LocalDate.now()))
         .futureValue
         .length shouldBe 1
-    }
-  }
 
-  "historyExists" should {
-    "return false when no history" in {
+  "historyExists" should:
+    "return false when no history" in:
       repository
         .historyExists(Environment.QA, LocalDate.now().minusDays(1))
         .futureValue shouldBe false
-    }
 
-    "return true when there are records for the given environment after the cutoff date" in {
+    "return true when there are records for the given environment after the cutoff date" in:
       repository.insertMany(seed(Environment.QA)).futureValue
 
       repository
         .historyExists(Environment.QA, LocalDate.now().minusDays(1))
         .futureValue shouldBe true
-    }
-  }
-}

@@ -16,6 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
+import org.mongodb.scala.ObservableFuture
 import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
 import uk.gov.hmrc.mongo.MongoComponent
 import uk.gov.hmrc.mongo.play.json.PlayMongoRepository
@@ -28,53 +29,44 @@ import scala.concurrent.{ExecutionContext, Future}
 @Singleton
 class LatestMongoCollectionSizeRepository @Inject()(
   override val mongoComponent: MongoComponent
-)(implicit
-  ec: ExecutionContext
+)(using
+  ExecutionContext
 ) extends PlayMongoRepository(
   mongoComponent = mongoComponent,
-  collectionName = LatestMongoCollectionSizeRepository.collectionName,
+  collectionName = "latestMongoCollectionSizes",
   domainFormat   = MongoCollectionSize.mongoFormat,
-  indexes        = LatestMongoCollectionSizeRepository.indexes
-) with Transactions {
+  indexes        = Seq(
+                     IndexModel(Indexes.ascending("service")),
+                     IndexModel(Indexes.ascending("environment")),
+                     IndexModel(
+                       Indexes.compoundIndex(
+                         Indexes.ascending("service"), // multiple services can share the same database
+                         Indexes.ascending("database"),
+                         Indexes.ascending("collection"),
+                         Indexes.ascending("environment")
+                       ),
+                       IndexOptions().unique(true).background(true)
+                     )
+                   )
+) with Transactions:
 
   // all records are deleted before inserting fresh on schedule
   override lazy val requiresTtlIndex: Boolean = false
 
-  private implicit val tc: TransactionConfiguration = TransactionConfiguration.strict
+  private given TransactionConfiguration = TransactionConfiguration.strict
 
-  def find(service: String, environment: Option[Environment] = None): Future[Seq[MongoCollectionSize]] = {
-    val filters = Seq(
-      Some(Filters.equal("service", service)),
-      environment.map(env => Filters.equal("environment", env.asString))
-    ).flatten
-
-    collection.find(Filters.and(filters:_*)).toFuture()
-  }
+  def find(service: String, environment: Option[Environment] = None): Future[Seq[MongoCollectionSize]] =
+    collection
+      .find(
+        Filters.and(
+          Filters.equal("service", service),
+          environment.fold(Filters.empty)(env => Filters.equal("environment", env.asString))
+        )
+      ).toFuture()
 
   def putAll(mcs: Seq[MongoCollectionSize], environment: Environment): Future[Unit] =
-    withSessionAndTransaction { session =>
-      for {
+    withSessionAndTransaction: session =>
+      for
         _ <- collection.deleteMany(session, Filters.equal("environment", environment.asString)).toFuture()
         _ <- collection.insertMany(session, mcs).toFuture()
-      } yield ()
-    }
-}
-
-object LatestMongoCollectionSizeRepository {
-  val collectionName = "latestMongoCollectionSizes"
-
-  val indexes: Seq[IndexModel] =
-    Seq(
-      IndexModel(Indexes.ascending("service")),
-      IndexModel(Indexes.ascending("environment")),
-      IndexModel(
-        Indexes.compoundIndex(
-          Indexes.ascending("service"), // multiple services can share the same database
-          Indexes.ascending("database"),
-          Indexes.ascending("collection"),
-          Indexes.ascending("environment")
-        ),
-        IndexOptions().unique(true).background(true)
-      )
-    )
-}
+      yield ()

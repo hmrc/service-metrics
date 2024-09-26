@@ -31,58 +31,51 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class GitHubProxyConnectorSpec
   extends AnyWordSpec
-  with Matchers
-  with ScalaFutures
-  with IntegrationPatience
-  with HttpClientV2Support
-  with WireMockSupport {
+     with Matchers
+     with ScalaFutures
+     with IntegrationPatience
+     with HttpClientV2Support
+     with WireMockSupport:
 
+  private lazy val gitHubProxyConnector =
+    GitHubProxyConnector(
+      httpClientV2   = httpClientV2,
+      ServicesConfig(Configuration(
+        "microservice.services.platops-github-proxy.port" -> wireMockPort,
+        "microservice.services.platops-github-proxy.host" -> wireMockHost
+      ))
+    )
 
-    private lazy val gitHubProxyConnector =
-      new GitHubProxyConnector(
-        httpClientV2   = httpClientV2,
-        new ServicesConfig(Configuration(
-          "microservice.services.platops-github-proxy.port" -> wireMockPort,
-          "microservice.services.platops-github-proxy.host" -> wireMockHost
-        ))
-      )
+  given HeaderCarrier = HeaderCarrier()
 
-    implicit val headerCarrier: HeaderCarrier = HeaderCarrier()
-
-
-  "getMongoOverrides" should {
-
-    val overridesRaw =
-      """
-        |{
-        |  "service-one": [
-        |    {
-        |      "replicaset": "public",
-        |      "dbs": [
-        |        "serviceone"
-        |      ]
-        |    }
-        |  ],
-        |  "service-two": [
-        |    {
-        |      "replicaset": "public",
-        |      "dbs": [
-        |        "randomdb"
-        |      ]
-        |    }
-        |  ]
-        |}
-        |""".stripMargin
-
-    "return DBOverrides" in {
-      stubFor(
+  "getMongoOverrides" should:
+    "return DBOverrides" in:
+      stubFor:
         get(urlEqualTo("/platops-github-proxy/github-raw/vault-policy-definitions-qa/main/db-overrides.json"))
-          .willReturn(
+          .willReturn:
             aResponse()
               .withStatus(200)
-              .withBody(overridesRaw)
-          )
-      )
+              .withBody("""
+                {
+                  "service-one": [
+                    {
+                      "replicaset": "public",
+                      "dbs": [
+                        "serviceone"
+                      ]
+                    }
+                  ],
+                  "service-two": [
+                    {
+                      "replicaset": "public",
+                      "dbs": [
+                        "randomdb"
+                      ]
+                    }
+                  ]
+                }
+                """
+              )
 
       val expected = Seq(
         DbOverride(service = "service-one", dbs = Seq("serviceone")),
@@ -98,7 +91,3 @@ class GitHubProxyConnectorSpec
       verify(
         getRequestedFor(urlEqualTo("/platops-github-proxy/github-raw/vault-policy-definitions-qa/main/db-overrides.json"))
       )
-    }
-  }
-}
-
