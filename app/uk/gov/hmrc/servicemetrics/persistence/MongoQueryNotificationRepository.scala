@@ -37,7 +37,7 @@ import scala.concurrent.{ExecutionContext, Future}
 @Singleton
 class MongoQueryNotificationRepository @Inject()(
   mongoComponent          : MongoComponent,
-  slackNotifiactionsConfig: SlackNotificationsConfig,
+  slackNotificationsConfig: SlackNotificationsConfig,
 )(using
   ExecutionContext
 ) extends PlayMongoRepository(
@@ -50,7 +50,7 @@ class MongoQueryNotificationRepository @Inject()(
                      IndexModel(Indexes.ascending("queryType")),
                      IndexModel(Indexes.ascending("collection")),
                      IndexModel(Indexes.ascending("team")),
-                     IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(slackNotifiactionsConfig.throttlingPeriod.toDays, TimeUnit.DAYS)),
+                     IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(slackNotificationsConfig.throttlingPeriod.toDays, TimeUnit.DAYS)),
                    ),
   extraCodecs    = Seq(Codecs.playFormatCodec(MongoQueryType.format))
 ):

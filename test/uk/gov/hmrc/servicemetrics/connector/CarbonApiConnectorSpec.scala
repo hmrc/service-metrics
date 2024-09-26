@@ -52,44 +52,41 @@ class CarbonApiConnectorSpec
 
   "getMongoMetrics" should:
     "return mongo metrics" in:
-
-      val rawResponse =
-        """
-          |[
-          |  {
-          |    "target": "mongo-service-one-collection-one",
-          |    "datapoints": [
-          |      [
-          |        1676590,
-          |        1675606800
-          |      ]
-          |    ],
-          |    "tags": {
-          |      "aggregatedBy": "max",
-          |      "name": "mongo-service-one-collection-one"
-          |    }
-          |  },
-          |  {
-          |    "target": "mongo-service-one-collection-two",
-          |    "datapoints": [
-          |      [
-          |        79688835,
-          |        1675606800
-          |      ]
-          |    ],
-          |    "tags": {
-          |      "aggregatedBy": "max",
-          |      "name": "mongo-service-one-collection-two"
-          |    }
-          |  }
-          |]""".stripMargin
-
       stubFor:
         get(urlPathEqualTo("/render"))
           .willReturn:
             aResponse()
               .withStatus(200)
-              .withBody(rawResponse)
+              .withBody("""
+                [
+                  {
+                    "target": "mongo-service-one-collection-one",
+                    "datapoints": [
+                      [
+                        1676590,
+                        1675606800
+                      ]
+                    ],
+                    "tags": {
+                      "aggregatedBy": "max",
+                      "name": "mongo-service-one-collection-one"
+                    }
+                  },
+                  {
+                    "target": "mongo-service-one-collection-two",
+                    "datapoints": [
+                      [
+                        79688835,
+                        1675606800
+                      ]
+                    ],
+                    "tags": {
+                      "aggregatedBy": "max",
+                      "name": "mongo-service-one-collection-two"
+                    }
+                  }
+                ]"""
+              )
 
       val expected = Seq(
         MongoCollectionSizeMetric(

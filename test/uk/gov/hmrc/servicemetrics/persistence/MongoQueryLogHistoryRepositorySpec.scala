@@ -38,8 +38,8 @@ class MongoQueryLogHistoryRepositorySpec
   ) =
       mongoQueryTypes.map: queryType =>
         MongoQueryLogHistoryRepository.MongoQueryLogHistory(
-          timestamp   = Instant.now,
-          since       = Instant.now.minusSeconds(20),
+          timestamp   = Instant.now(),
+          since       = Instant.now().minusSeconds(20),
           database    = "database",
           details     = Seq(
             MongoQueryLogHistoryRepository.NonPerformantQueryDetails(

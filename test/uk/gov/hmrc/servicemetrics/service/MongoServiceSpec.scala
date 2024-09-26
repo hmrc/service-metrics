@@ -101,8 +101,8 @@ class MongoServiceSpec
         when(mockElasticsearchConnector.getSlowQueries(any[Environment], any[String], any[Instant], any[Instant])(using any[HeaderCarrier]))
           .thenReturn(Future.successful(Some(
             ElasticsearchConnector.MongoQueryLog(
-              java.time.Instant.now,
-              java.time.Instant.now,
+              Instant.now(),
+              Instant.now(),
               Seq(ElasticsearchConnector.MongoCollectionNonPerfomantQuery(
                 "collection",
                 3001,

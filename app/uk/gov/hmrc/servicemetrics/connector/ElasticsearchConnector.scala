@@ -44,9 +44,7 @@ class ElasticsearchConnector @Inject()(
     elasticsearchConfig.environmentPasswords
       .map: (env, password) =>
         val decodedPassword =
-          scala.util.Try(String(Base64.getDecoder.decode(password)).trim)
-            // TODO fail if invalid password
-            .getOrElse { logger.info(s"Couldn't decode password for env ${env.asString}"); "" }
+          String(Base64.getDecoder.decode(password))
         env -> s"Basic ${String(Base64.getEncoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
 
   def getSlowQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Option[MongoQueryLog]] =

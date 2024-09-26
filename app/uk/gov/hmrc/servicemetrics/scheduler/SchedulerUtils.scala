@@ -45,12 +45,12 @@ trait SchedulerUtils:
           actorSystem.scheduler.scheduleWithFixedDelay(initialDelay, interval): () =>
             val start = System.currentTimeMillis
             logger.info(s"Scheduler $label started")
-            f.map { res =>
-              logger.info(s"Scheduler $label finished - took ${System.currentTimeMillis - start} millis")
-              res
-            }
-            .recover:
-              case e => logger.error(s"$label interrupted after ${System.currentTimeMillis - start} millis because: ${e.getMessage}", e)
+            f
+              .map: res =>
+                logger.info(s"Scheduler $label finished - took ${System.currentTimeMillis - start} millis")
+                res
+              .recover:
+                case e => logger.error(s"$label interrupted after ${System.currentTimeMillis - start} millis because: ${e.getMessage}", e)
 
         applicationLifecycle.addStopHook(() => Future.successful(cancellable.cancel()))
       else

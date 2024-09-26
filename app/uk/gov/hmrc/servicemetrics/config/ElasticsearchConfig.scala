@@ -16,6 +16,7 @@
 
 package uk.gov.hmrc.servicemetrics.config
 
+import play.api.Configuration
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 
@@ -23,6 +24,7 @@ import javax.inject.{Inject, Singleton}
 
 @Singleton
 class ElasticsearchConfig @Inject() (
+  configuration : Configuration,
   servicesConfig: ServicesConfig
 ):
 
@@ -30,16 +32,16 @@ class ElasticsearchConfig @Inject() (
     servicesConfig.baseUrl("elasticsearch")
 
   val username: String =
-    servicesConfig.getString("microservice.services.elasticsearch.username")
+    configuration.get[String]("microservice.services.elasticsearch.username")
 
   val environmentPasswords: Map[Environment, String] =
     Environment.values
       .map: env =>
-        env -> servicesConfig.getString(s"microservice.services.elasticsearch.${env.asString}.password")
+        env -> configuration.get[String](s"microservice.services.elasticsearch.${env.asString}.password")
       .toMap
 
   val mongoDbIndex: String =
-    servicesConfig.getString("microservice.services.elasticsearch.mongodb-index")
+    configuration.get[String]("microservice.services.elasticsearch.mongodb-index")
 
   val longRunningQueryInMilliseconds: Int =
-    servicesConfig.getInt("microservice.services.elasticsearch.long-running-query-in-milliseconds")
+    configuration.get[Int]("microservice.services.elasticsearch.long-running-query-in-milliseconds")

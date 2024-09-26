@@ -52,14 +52,14 @@ class MongoMetricsScheduler @Inject()(
     lock            = LockService(lockRepository, "mongo-metrics-scheduler", 30.minutes)
   ) {
     val envs: List[Environment] =
-      Environment.values.filterNot(_.equals(Environment.Integration))
+      Environment.values.toList.filterNot(_.equals(Environment.Integration))
     logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")
     for
       _ <- envs.foldLeftM(())((_, env) => updatePerEnvironment(env))
     yield logger.info(s"Finished updating mongo metrics for ${envs.mkString(", ")}")
   }
 
-  private def updatePerEnvironment(env: Environment)(implicit hc: HeaderCarrier) =
+  private def updatePerEnvironment(env: Environment)(using HeaderCarrier) =
     for
       _ <- mongoMetricsService
              .updateCollectionSizes(env)

@@ -36,10 +36,10 @@ object SchedulerConfig:
     val intervalKey     = s"$schedulerKey.interval"
     val initialDelayKey = s"$schedulerKey.initialDelay"
     SchedulerConfig(
-        enabledKey   = enabledKey
-      , enabled      = configuration.get[Boolean](enabledKey)
-      , interval     = configuration.get[FiniteDuration](intervalKey)
-      , initialDelay = configuration.get[FiniteDuration](initialDelayKey)
+      enabledKey   = enabledKey
+    , enabled      = configuration.get[Boolean](enabledKey)
+    , interval     = configuration.get[FiniteDuration](intervalKey)
+    , initialDelay = configuration.get[FiniteDuration](initialDelayKey)
     )
 
 @Singleton

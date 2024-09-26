@@ -50,62 +50,59 @@ class TeamsAndRepositoriesConnectorSpec
 
   "allServices" should:
     "return list of service names" in:
-
-      val rawResponse =
-        """
-          |[
-          |  {
-          |    "name": "service-one",
-          |    "description": "",
-          |    "url": "https://github.com/hmrc/service-one",
-          |    "createdDate": "2018-11-07T10:54:02Z",
-          |    "lastActiveDate": "2022-01-11T17:10:23Z",
-          |    "isPrivate": true,
-          |    "repoType": "Service",
-          |    "owningTeams": [],
-          |    "language": "HTML",
-          |    "isArchived": false,
-          |    "defaultBranch": "main",
-          |    "branchProtection": {
-          |      "requiresApprovingReviews": false,
-          |      "dismissesStaleReviews": false,
-          |      "requiresCommitSignatures": true
-          |    },
-          |    "isDeprecated": false,
-          |    "teamNames": [
-          |      "Team One"
-          |    ]
-          |  },
-          |  {
-          |    "name": "service-two",
-          |    "description": "",
-          |    "url": "https://github.com/hmrc/service-one",
-          |    "createdDate": "2019-10-10T15:13:50Z",
-          |    "lastActiveDate": "2020-11-20T08:51:39Z",
-          |    "isPrivate": true,
-          |    "repoType": "Service",
-          |    "owningTeams": [],
-          |    "language": "HTML",
-          |    "isArchived": false,
-          |    "defaultBranch": "main",
-          |    "branchProtection": {
-          |      "requiresApprovingReviews": false,
-          |      "dismissesStaleReviews": false,
-          |      "requiresCommitSignatures": true
-          |    },
-          |    "isDeprecated": false,
-          |    "teamNames": [
-          |      "Team Two"
-          |    ]
-          |  }
-          |]""".stripMargin
-
       stubFor:
         get(urlEqualTo("/api/v2/repositories?repoType=service"))
           .willReturn:
             aResponse()
               .withStatus(200)
-              .withBody(rawResponse)
+              .withBody("""
+                [
+                  {
+                    "name": "service-one",
+                    "description": "",
+                    "url": "https://github.com/hmrc/service-one",
+                    "createdDate": "2018-11-07T10:54:02Z",
+                    "lastActiveDate": "2022-01-11T17:10:23Z",
+                    "isPrivate": true,
+                    "repoType": "Service",
+                    "owningTeams": [],
+                    "language": "HTML",
+                    "isArchived": false,
+                    "defaultBranch": "main",
+                    "branchProtection": {
+                      "requiresApprovingReviews": false,
+                      "dismissesStaleReviews": false,
+                      "requiresCommitSignatures": true
+                    },
+                    "isDeprecated": false,
+                    "teamNames": [
+                      "Team One"
+                    ]
+                  },
+                  {
+                    "name": "service-two",
+                    "description": "",
+                    "url": "https://github.com/hmrc/service-one",
+                    "createdDate": "2019-10-10T15:13:50Z",
+                    "lastActiveDate": "2020-11-20T08:51:39Z",
+                    "isPrivate": true,
+                    "repoType": "Service",
+                    "owningTeams": [],
+                    "language": "HTML",
+                    "isArchived": false,
+                    "defaultBranch": "main",
+                    "branchProtection": {
+                      "requiresApprovingReviews": false,
+                      "dismissesStaleReviews": false,
+                      "requiresCommitSignatures": true
+                    },
+                    "isDeprecated": false,
+                    "teamNames": [
+                      "Team Two"
+                    ]
+                  }
+                ]"""
+              )
 
       val expected = Seq(
         Service(

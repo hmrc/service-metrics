@@ -49,35 +49,33 @@ class GitHubProxyConnectorSpec
   given HeaderCarrier = HeaderCarrier()
 
   "getMongoOverrides" should:
-    val overridesRaw =
-      """
-        |{
-        |  "service-one": [
-        |    {
-        |      "replicaset": "public",
-        |      "dbs": [
-        |        "serviceone"
-        |      ]
-        |    }
-        |  ],
-        |  "service-two": [
-        |    {
-        |      "replicaset": "public",
-        |      "dbs": [
-        |        "randomdb"
-        |      ]
-        |    }
-        |  ]
-        |}
-        |""".stripMargin
-
     "return DBOverrides" in:
       stubFor:
         get(urlEqualTo("/platops-github-proxy/github-raw/vault-policy-definitions-qa/main/db-overrides.json"))
           .willReturn:
             aResponse()
               .withStatus(200)
-              .withBody(overridesRaw)
+              .withBody("""
+                {
+                  "service-one": [
+                    {
+                      "replicaset": "public",
+                      "dbs": [
+                        "serviceone"
+                      ]
+                    }
+                  ],
+                  "service-two": [
+                    {
+                      "replicaset": "public",
+                      "dbs": [
+                        "randomdb"
+                      ]
+                    }
+                  ]
+                }
+                """
+              )
 
       val expected = Seq(
         DbOverride(service = "service-one", dbs = Seq("serviceone")),

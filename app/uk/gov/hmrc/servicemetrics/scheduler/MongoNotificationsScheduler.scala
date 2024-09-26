@@ -60,8 +60,8 @@ class MongoNotificationsScheduler  @Inject()(
     lock            = LockService(lockRepository, "mongo-notifications-scheduler", 30.minutes)
   ):
     val envs: List[Environment] =
-      Environment.values.filterNot(_.equals(Environment.Integration))
-    val to   = Instant.now
+      Environment.values.toList.filterNot(_.equals(Environment.Integration))
+    val to   = Instant.now()
     val from = to.minus(slackNotificationsConfig.notificationPeriod.toHours, ChronoUnit.HOURS)
 
     if duringWorkingHours() then
@@ -101,8 +101,8 @@ class MongoNotificationsScheduler  @Inject()(
       mongoQueryNotifications <- notificationData.foldLeftM[Future, Seq[MongoQueryNotification]](Seq.empty):
                                    case (acc, (team, notifications)) =>
                                      if slackNotificationsConfig.notifyTeams || slackNotificationsConfig.notificationChannels.nonEmpty then
-                                       val notificationChannelsLookup = Option.when(slackNotificationsConfig.notificationChannels.nonEmpty)(SlackChannels(slackNotificationsConfig.notificationChannels))
-                                       val teamChannelLookup          = Option.when(slackNotificationsConfig.notifyTeams)(GithubTeam(team))
+                                       val notificationChannelsLookup = Option.when(slackNotificationsConfig.notificationChannels.nonEmpty)(ChannelLookup.SlackChannels(slackNotificationsConfig.notificationChannels))
+                                       val teamChannelLookup          = Option.when(slackNotificationsConfig.notifyTeams)(ChannelLookup.GithubTeam(team))
                                        (notificationChannelsLookup ++ teamChannelLookup).toList
                                          .foldLeftM[Future, Seq[MongoQueryNotification]](acc): (a, cl) =>
                                            notifyChannel(cl, notifications, team, env).map(_ ++ a)

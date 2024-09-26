@@ -147,29 +147,23 @@ object MongoQueryLogHistoryRepository:
       ~ (__ \ "teams"      ).format[Seq[String]]
       )(MongoQueryLogHistory.apply, o => Tuple.fromProductTyped(o))
 
-  sealed trait MongoQueryType { val value: String }
+  enum MongoQueryType(val value: String):
+    case SlowQuery       extends MongoQueryType("Slow Running Query")
+    case NonIndexedQuery extends MongoQueryType("Non-indexed Collection Query")
 
   object MongoQueryType:
-    case object SlowQuery                     extends MongoQueryType { val value: String = "Slow Running Query" }
-    case object NonIndexedQuery               extends MongoQueryType { val value: String = "Non-indexed Collection Query" }
-    case class  OtherQuery(val value: String) extends MongoQueryType
-
-    val values: Seq[MongoQueryType] = Seq(SlowQuery, NonIndexedQuery)
-
     val format: Format[MongoQueryType] =
       new Format[MongoQueryType]:
         override def writes(o: MongoQueryType): JsValue = JsString(o.value)
         override def reads(json: JsValue): JsResult[MongoQueryType] =
           json.validate[String]
-            .flatMap(s =>
-              MongoQueryType.values.find(_.value == s)
-                .map(e => JsSuccess(e)).getOrElse(JsError("Invalid MongoDb query type"))
-            )
+            .flatMap: s =>
+              values.find(_.value == s).fold(JsError("Invalid MongoDb query type"))(JsSuccess(_))
 
   case class NonPerformantQueries(
     service    : String,
     environment: Environment,
-    queryTypes : Seq[MongoQueryType],
+    queryTypes : Seq[MongoQueryType]
   )
 
   object NonPerformantQueries:

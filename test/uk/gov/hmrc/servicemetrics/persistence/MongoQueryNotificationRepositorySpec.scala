@@ -16,61 +16,35 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
-import com.typesafe.config.ConfigFactory
-import play.api.Configuration
+import org.mockito.Mockito.when
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.hmrc.mongo.test.DefaultPlayMongoRepositorySupport
 import uk.gov.hmrc.servicemetrics.model.Environment
+import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 
 import java.time.Instant
 import scala.concurrent.ExecutionContext.Implicits.global
-import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
+import scala.concurrent.duration.DurationInt
 
 class MongoQueryNotificationRepositorySpec
   extends AnyWordSpec
-    with Matchers
-    with DefaultPlayMongoRepositorySupport[MongoQueryNotificationRepository.MongoQueryNotification]:
+     with Matchers
+     with MockitoSugar
+     with DefaultPlayMongoRepositorySupport[MongoQueryNotificationRepository.MongoQueryNotification]:
 
-  private val config = Configuration(ConfigFactory.parseString(s"""
-    |mongo-metrics-scheduler {
-    |  enabled      = true
-    |  interval     = 1.hour
-    |  initialDelay = 1.second
-    |}
-    |
-    |mongo-notifications-scheduler {
-    |  enabled      = true
-    |  interval     = 1.day
-    |  initialDelay = 1.second
-    |}
-    |alerts {
-    |  slack {
-    |    auth-token = token
-    |    enabled = true
-    |    notification-period = 1.days
-    |    throttling-period   = 7.days
-    |    notify-teams = false
-    |    notification-channels = ["channel"]
-    |
-    |    kibana {
-    |      baseUrl = "http://logs.$${env}.local"
-    |      links  = {
-    |        "Slow Running Query"           = "url"
-    |        "Non-Indexed Collection Query" = "url"
-    |      }
-    |    }
-    |  }
-    |}
-    |""".stripMargin))
+  private val mockSlackNotificationsConfig = mock[SlackNotificationsConfig]
+  when(mockSlackNotificationsConfig.throttlingPeriod)
+    .thenReturn(7.days)
 
   override val repository: MongoQueryNotificationRepository =
-    MongoQueryNotificationRepository(mongoComponent, SlackNotificationsConfig(config))
+    MongoQueryNotificationRepository(mongoComponent, mockSlackNotificationsConfig)
 
   private def seed(env: Environment) =
     Seq(
       MongoQueryNotificationRepository.MongoQueryNotification(
-        timestamp   = Instant.now,
+        timestamp   = Instant.now(),
         service     = "service",
         database    = "database",
         queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,

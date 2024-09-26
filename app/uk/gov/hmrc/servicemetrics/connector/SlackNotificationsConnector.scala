@@ -23,7 +23,6 @@ import play.api.libs.ws.writeableOf_JsValue
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.HttpReads.Implicits._
-import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
 import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -31,11 +30,10 @@ import scala.concurrent.{ExecutionContext, Future}
 @Singleton
 class SlackNotificationsConnector @Inject()(
   httpClientV2            : HttpClientV2,
-  servicesConfig          : ServicesConfig,
-  slackNotifiactionsConfig: SlackNotificationsConfig
+  slackNotificationsConfig: SlackNotificationsConfig
 )(using ExecutionContext):
 
-  private val url: String = servicesConfig.baseUrl("slack-notifications")
+  private val url: String = slackNotificationsConfig.url
 
   def sendMessage(message: SlackNotificationRequest)(using HeaderCarrier): Future[SlackNotificationResponse] =
     given Writes[SlackNotificationRequest] = SlackNotificationsFormats.snreqWrites
@@ -43,18 +41,22 @@ class SlackNotificationsConnector @Inject()(
     httpClientV2
       .post(url"$url/slack-notifications/v2/notification")
       .withBody(Json.toJson(message))
-      .setHeader("Authorization" -> slackNotifiactionsConfig.authToken)
-      .setHeader("Content-type"  -> "application/json")
+      .setHeader("Authorization" -> slackNotificationsConfig.authToken)
       .execute[SlackNotificationResponse]
 
 object SlackNotificationsFormats:
 
   val snreqWrites: Writes[SlackNotificationRequest] =
-    given Writes[ChannelLookup] = Writes {
-      case s: OwningTeams   => Json.toJson(s)(Json.writes[OwningTeams])
-      case s: SlackChannels => Json.toJson(s)(Json.writes[SlackChannels])
-      case s: GithubTeam    => Json.toJson(s)(Json.writes[GithubTeam])
-    }
+    given OWrites[ChannelLookup.GithubTeam   ] = Writes.at[String     ](__ \ "teamName"      ).contramap[ChannelLookup.GithubTeam   ](_.teamName)
+    given OWrites[ChannelLookup.OwningTeams  ] = Writes.at[String     ](__ \ "repositoryName").contramap[ChannelLookup.OwningTeams  ](_.repositoryName)
+    given OWrites[ChannelLookup.SlackChannels] = Writes.at[Seq[String]](__ \ "slackChannels" ).contramap[ChannelLookup.SlackChannels](_.slackChannels)
+
+    given Writes[ChannelLookup] =
+      Writes {
+        case s: ChannelLookup.GithubTeam    => Json.obj("by" -> s.by).deepMerge(Json.toJsObject(s))
+        case s: ChannelLookup.OwningTeams   => Json.obj("by" -> s.by).deepMerge(Json.toJsObject(s))
+        case s: ChannelLookup.SlackChannels => Json.obj("by" -> s.by).deepMerge(Json.toJsObject(s))
+      }
 
     ( (__ \ "channelLookup").write[ChannelLookup]
     ~ (__ \ "displayName"  ).write[String]
@@ -79,25 +81,13 @@ case class SlackNotificationError(
 )
 
 case class SlackNotificationResponse(
-  errors: List[SlackNotificationError]
+  errors: Seq[SlackNotificationError]
 )
 
-sealed trait ChannelLookup { def by: String }
-
-case class GithubTeam(
-  teamName: String,
-  by      : String = "github-team"
-) extends ChannelLookup
-
-case class OwningTeams(
-  repositoryName: String,
-  by            : String = "github-repository"
-) extends ChannelLookup
-
-case class SlackChannels(
-  slackChannels: Seq[String],
-  by           : String = "slack-channel"
-) extends ChannelLookup
+enum ChannelLookup(val by: String):
+  case GithubTeam   (teamName      : String     ) extends ChannelLookup("github-team")
+  case OwningTeams  (repositoryName: String     ) extends ChannelLookup("github-repository")
+  case SlackChannels(slackChannels : Seq[String]) extends ChannelLookup("slack-channel")
 
 case class SlackNotificationRequest(
   channelLookup: ChannelLookup,

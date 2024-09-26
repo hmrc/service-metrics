@@ -30,6 +30,7 @@ import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.mongo.lock.MongoLockRepository
+import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
 import uk.gov.hmrc.servicemetrics.config.{SchedulerConfig, SchedulerConfigs}
 import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
@@ -45,29 +46,16 @@ import scala.concurrent.Future
 
 class MongoNotificationsSchedulerSpec
   extends AnyWordSpec
-  with Matchers
-  with ScalaFutures
-  with MockitoSugar
-  with IntegrationPatience
-  with ScalaCheckPropertyChecks:
+     with Matchers
+     with ScalaFutures
+     with MockitoSugar
+     with IntegrationPatience
+     with ScalaCheckPropertyChecks:
 
   "notifyPerEnvironment" should:
     "notify teams of non-performant queries" when:
       "there are non-performant queries to be notified of and notifications are enabled" in new MongoNotificationsSchedulerFixture(
-        queries = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
-                      timestamp   = Instant.now,
-                      since       = Instant.now.minusSeconds(20),
-                      details     = Seq(MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
-                        collection  = "collection",
-                        duration    = 3001,
-                        occurrences = 1
-                      )),
-                      database    = "database",
-                      service     = "service",
-                      queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
-                      environment = Environment.QA,
-                      teams       = Seq("team")
-                    )))
+        withQueries = true
       ):
         val env  = Environment.QA
         val from = Instant.now()
@@ -108,21 +96,8 @@ class MongoNotificationsSchedulerSpec
           .sendMessage(any[SlackNotificationRequest])(using any[HeaderCarrier])
 
       "notification has been already triggered for this service, environment, collection and query type" in new MongoNotificationsSchedulerFixture(
-        hasBeenNotified = true,
-        queries         = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
-                            timestamp   = Instant.now,
-                            since       = Instant.now.minusSeconds(20),
-                            details     = Seq(MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
-                                            collection  = "collection",
-                                            duration    = 3001,
-                                            occurrences = 1
-                                          )),
-                            database    = "database",
-                            service     = "service",
-                            queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
-                            environment = Environment.QA,
-                            teams       = Seq("team")
-                          )))
+        withQueries     = true,
+        hasBeenNotified = true
       ):
         val env  = Environment.QA
         val from = Instant.now()
@@ -142,22 +117,9 @@ class MongoNotificationsSchedulerSpec
           .sendMessage(any[SlackNotificationRequest])(using any[HeaderCarrier])
 
       "there is no notification channels and not notifying to teams" in new MongoNotificationsSchedulerFixture(
-        notifyTeams            = false,
-        notificationChannels   = Seq.empty,
-        queries                = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
-                                   timestamp   = Instant.now(),
-                                   since       = Instant.now().minusSeconds(20),
-                                   database    = "database",
-                                   details     = Seq(MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
-                                                   collection  = "collection",
-                                                   duration    = 3001,
-                                                   occurrences = 1
-                                                 )),
-                                   service     = "service",
-                                   queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
-                                   environment = Environment.QA,
-                                   teams       = Seq("team")
-                                 )))
+        withQueries          = true,
+        notifyTeams          = false,
+        notificationChannels = Seq.empty
       ):
         val env  = Environment.QA
         val from = Instant.now()
@@ -177,22 +139,9 @@ class MongoNotificationsSchedulerSpec
           .sendMessage(any[SlackNotificationRequest])(using any[HeaderCarrier])
 
       "there is no notification channels" in new MongoNotificationsSchedulerFixture(
+        withQueries            = true,
         notifyTeams            = true,
-        notificationChannels   = Seq.empty,
-        queries                = Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
-                                   timestamp   = Instant.now,
-                                   since       = Instant.now.minusSeconds(20),
-                                   database    = "database",
-                                   details     = Seq(MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
-                                                   collection  = "collection",
-                                                   duration    = 3001,
-                                                   occurrences = 1
-                                                 )),
-                                   service     = "service",
-                                   queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
-                                   environment = Environment.QA,
-                                   teams       = Seq("team")
-                                 )))
+        notificationChannels   = Seq.empty
       ):
         val env  = Environment.QA
         val from = Instant.now()
@@ -218,7 +167,6 @@ class MongoNotificationsSchedulerSpec
       val minutes  = for (minute  <- Gen.choose(0   , 59  )) yield minute
 
       forAll(yearDays, years, hours, minutes): (yearDay: Int, year: Int, hour: Int, minute: Int) =>
-
         whenever(
              (LocalDate.of(year, 1, 1).isLeapYear && yearDay < 366)
           || !LocalDate.of(year, 1, 1).isLeapYear
@@ -237,11 +185,12 @@ class MongoNotificationsSchedulerSpec
           else
             scheduler.duringWorkingHours(Some(dateTime)) shouldBe false
 
+
   abstract class MongoNotificationsSchedulerFixture(
-    queries               : Map[String, Seq[MongoQueryLogHistoryRepository.MongoQueryLogHistory]] = Map.empty,
-    hasBeenNotified       : Boolean                                                               = false,
-    notifyTeams           : Boolean                                                               = true,
-    notificationChannels  : Seq[String]                                                           = Seq("channel"),
+    withQueries           : Boolean     = false,
+    hasBeenNotified       : Boolean     = false,
+    notifyTeams           : Boolean     = true,
+    notificationChannels  : Seq[String] = Seq("channel")
   ) extends MockitoSugar:
 
     given ActorSystem          = ActorSystem()
@@ -254,6 +203,7 @@ class MongoNotificationsSchedulerSpec
         1.second,
         1.second
       )
+
     val config = Configuration(ConfigFactory.parseString(s"""
       |mongo-metrics-scheduler {
       |  enabled      = true
@@ -292,7 +242,8 @@ class MongoNotificationsSchedulerSpec
     val mockMongoLockRepository         = mock[MongoLockRepository]
     val mockMongoService                = mock[MongoService]
     val mockSlackNotificationsConnector = mock[SlackNotificationsConnector]
-    val slackNotificationsConfig        = SlackNotificationsConfig(config)
+    val mockServicesConfig              = mock[ServicesConfig]
+    val slackNotificationsConfig        = SlackNotificationsConfig(config, mockServicesConfig)
 
     val scheduler = MongoNotificationsScheduler(
       schedulerConfig             = schedulerConfigs,
@@ -301,6 +252,25 @@ class MongoNotificationsSchedulerSpec
       slackNotificationsConnector = mockSlackNotificationsConnector,
       slackNotificationsConfig    = slackNotificationsConfig,
     )
+
+    val queries: Map[String, Seq[MongoQueryLogHistoryRepository.MongoQueryLogHistory]] =
+      if withQueries then
+        Map("team" -> Seq(MongoQueryLogHistoryRepository.MongoQueryLogHistory(
+          timestamp   = Instant.now(),
+          since       = Instant.now().minusSeconds(20),
+          details     = Seq(MongoQueryLogHistoryRepository.NonPerformantQueryDetails(
+                          collection  = "collection",
+                          duration    = 3001,
+                          occurrences = 1
+                        )),
+          database    = "database",
+          service     = "service",
+          queryType   = MongoQueryLogHistoryRepository.MongoQueryType.SlowQuery,
+          environment = Environment.QA,
+          teams       = Seq("team")
+        )))
+      else
+        Map.empty
 
     when(mockMongoService.getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant]))
       .thenReturn(Future.successful(queries))

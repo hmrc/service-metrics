@@ -94,7 +94,7 @@ class MongoService @Inject()(
     for
       lastInsertDate  <- queryLogHistoryRepository.lastInsertDate()
                           .map(_.getOrElse(Instant.now().minus(1, ChronoUnit.HOURS)))
-      currentDate     =  Instant.now
+      currentDate     =  Instant.now()
       mappings        <- getMappings(environment)
       queryLogs       <- mappings.foldLeftM[Future, Seq[MongoQueryLogHistory]](Seq.empty): (acc, mapping) =>
                            getQueryLogs(mapping, environment, lastInsertDate, currentDate).map(acc ++ _)

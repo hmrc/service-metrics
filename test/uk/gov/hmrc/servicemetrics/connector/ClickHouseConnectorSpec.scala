@@ -52,19 +52,17 @@ class ClickHouseConnectorSpec
 
   "getDatabaseNames" should:
     "return a list of database names" in:
-      val rawResponse =
-        """
-          |{
-          |  "name": ["database-one", "database-two", "database-three"]
-          |}
-          |""".stripMargin
-
       stubFor:
         get(urlEqualTo("/latest/mongodbs"))
           .willReturn:
             aResponse()
               .withStatus(200)
-              .withBody(rawResponse)
+              .withBody("""
+                {
+                  "name": ["database-one", "database-two", "database-three"]
+                }
+                """
+              )
 
       val expected = Seq("database-one", "database-two", "database-three")
 
