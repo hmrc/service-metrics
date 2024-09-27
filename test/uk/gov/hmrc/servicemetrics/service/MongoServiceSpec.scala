@@ -103,7 +103,7 @@ class MongoServiceSpec
             ElasticsearchConnector.MongoQueryLog(
               Instant.now(),
               Instant.now(),
-              Seq(ElasticsearchConnector.MongoCollectionNonPerfomantQuery(
+              Seq(ElasticsearchConnector.MongoCollectionNonPerformantQuery(
                 "collection",
                 3001,
                 1,
