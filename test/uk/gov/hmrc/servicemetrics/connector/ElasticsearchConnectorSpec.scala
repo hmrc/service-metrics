@@ -111,7 +111,7 @@ class ElasticsearchConnectorSpec
             since                = now,
             timestamp            = now,
             database             = mongoDbDatabase,
-            nonPerformantQueries = Seq(MongoCollectionNonPerfomantQuery(
+            nonPerformantQueries = Seq(MongoCollectionNonPerformantQuery(
               collection  = "preferences",
               occurrences = 1,
               duration    = 10121,

@@ -53,7 +53,7 @@ class ElasticsearchConnector @Inject()(
       s"duration:>${elasticsearchConfig.longRunningQueryInMilliseconds}",
       database,
       from,
-      to,
+      to
     )
 
   def getNonIndexedQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Option[MongoQueryLog]] =
@@ -62,13 +62,11 @@ class ElasticsearchConnector @Inject()(
       "scan: COLLSCAN",
       database,
       from,
-      to,
+      to
     )
 
   private def getMongoDbLogs(environment: Environment, query: String, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Option[MongoQueryLog]] =
-    val baseUrl = elasticsearchConfig.elasticSearchBaseUrl.replace("$env", environment.asString)
-
-    given Reads[Seq[MongoCollectionNonPerfomantQuery]] = MongoCollectionNonPerfomantQuery.reads
+    given Reads[Seq[MongoCollectionNonPerformantQuery]] = MongoCollectionNonPerformantQuery.reads
 
     val body = Json.parse(s"""
       {
@@ -112,19 +110,17 @@ class ElasticsearchConnector @Inject()(
         ]
       }""")
 
+    val url = url"${elasticsearchConfig.elasticSearchBaseUrl.replace("$env", environment.asString)}/${elasticsearchConfig.mongoDbIndex}/_search/"
+
     httpClientV2
-      .post(url"$baseUrl/${elasticsearchConfig.mongoDbIndex}/_search/")
+      .post(url)
       .setHeader:
         "Authorization" -> basicAuthenticationCredentials(environment)
       .withBody(body)
-      .execute[JsValue]
-      .map: json =>
-        json.validate[Seq[MongoCollectionNonPerfomantQuery]]
-          .fold(error =>
-            logger.error(s"Error while parsing JSON $json\n\n$error")
-            Seq.empty
-          , identity
-          )
+      .execute[Seq[MongoCollectionNonPerformantQuery]]
+      .recover: e =>
+        logger.error(s"Error getting mongo db logs for query $query from $url: ${e.getMessage}", e)
+        Seq.empty
       .map: nonPerformantQueries =>
         Option.when(nonPerformantQueries.nonEmpty):
           MongoQueryLog(
@@ -137,24 +133,24 @@ class ElasticsearchConnector @Inject()(
 
 object ElasticsearchConnector:
 
-  case class MongoCollectionNonPerfomantQuery(
+  case class MongoCollectionNonPerformantQuery(
     collection : String,
     occurrences: Int,
     duration   : Int,
   )
 
-  object MongoCollectionNonPerfomantQuery:
-    val reads: Reads[Seq[MongoCollectionNonPerfomantQuery]] =
-      given Reads[MongoCollectionNonPerfomantQuery] =
-        ( (__ \ "key").read[String]
-        ~ (__ \ "doc_count" ).read[Int]
-        ~ (__ \ "avg_duration" \ "value"  ).read[Double].map(_.toInt)
+  object MongoCollectionNonPerformantQuery:
+    val reads: Reads[Seq[MongoCollectionNonPerformantQuery]] =
+      given Reads[MongoCollectionNonPerformantQuery] =
+        ( (__ \ "key"                   ).read[String]
+        ~ (__ \ "doc_count"             ).read[Int]
+        ~ (__ \ "avg_duration" \ "value").read[Double].map(_.toInt)
         )(apply)
-      (__ \ "aggregations" \ "collections" \ "buckets").read[Seq[MongoCollectionNonPerfomantQuery]]
+      (__ \ "aggregations" \ "collections" \ "buckets").read[Seq[MongoCollectionNonPerformantQuery]]
 
   case class MongoQueryLog(
     since               : Instant,
     timestamp           : Instant,
-    nonPerformantQueries: Seq[MongoCollectionNonPerfomantQuery],
+    nonPerformantQueries: Seq[MongoCollectionNonPerformantQuery],
     database            : String,
   )
