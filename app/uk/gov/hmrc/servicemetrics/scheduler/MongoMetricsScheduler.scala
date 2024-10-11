@@ -18,24 +18,22 @@ package uk.gov.hmrc.servicemetrics.scheduler
 
 import cats.implicits._
 import org.apache.pekko.actor.ActorSystem
-import play.api.Logger
+import play.api.{Configuration, Logger}
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.mongo.lock.{LockService, MongoLockRepository}
-import uk.gov.hmrc.servicemetrics.config.SchedulerConfigs
 import uk.gov.hmrc.servicemetrics.model.Environment
-import uk.gov.hmrc.servicemetrics.service.MongoService
+import uk.gov.hmrc.servicemetrics.service.MongoMetricsService
 
 import javax.inject.{Inject, Singleton}
-import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
 
 @Singleton
 class MongoMetricsScheduler @Inject()(
-  schedulerConfig     : SchedulerConfigs
-, lockRepository      : MongoLockRepository
-, mongoMetricsService : MongoService
+  configuration      : Configuration
+, lockRepository     : MongoLockRepository
+, mongoMetricsService: MongoMetricsService
 )(using
   ActorSystem
 , ApplicationLifecycle
@@ -46,35 +44,30 @@ class MongoMetricsScheduler @Inject()(
 
   private given HeaderCarrier = HeaderCarrier()
 
+  private val schedulerConfig: SchedulerConfig =
+    SchedulerConfig(configuration, "mongo-metrics-scheduler")
+
   scheduleWithLock(
-    label           = "MongoMetricsScheduler",
-    schedulerConfig = schedulerConfig.mongoMetricsScheduler,
-    lock            = LockService(lockRepository, "mongo-metrics-scheduler", 30.minutes)
-  ) {
+    label           = "MongoMetricsScheduler"
+  , schedulerConfig = schedulerConfig
+  , lock            = LockService(lockRepository, "mongo-metrics-scheduler", schedulerConfig.interval)
+  ):
     val envs: List[Environment] =
       Environment.values.toList.filterNot(_.equals(Environment.Integration))
     logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")
     for
       _ <- envs.foldLeftM(())((_, env) => updatePerEnvironment(env))
     yield logger.info(s"Finished updating mongo metrics for ${envs.mkString(", ")}")
-  }
 
   private def updatePerEnvironment(env: Environment)(using HeaderCarrier) =
     for
-      _ <- mongoMetricsService
-             .updateCollectionSizes(env)
-             .recoverWith:
-               case NonFatal(e) =>
-                 logger.error(s"Failed to update mongo collection sizes for ${env.asString}", e)
-                 Future.unit
-      _ <-
-           if schedulerConfig.collectNonPerfomantQueriesEnabled then
-             mongoMetricsService
-               .insertQueryLogs(env)
-               .recoverWith:
-                 case NonFatal(e) =>
-                   logger.error(s"Failed to insert mongo query logs for ${env.asString}", e)
-                   Future.unit
-           else
-             Future.unit
+      dbMappings <- mongoMetricsService.dbMappings(env)
+      _          <- mongoMetricsService
+                      .updateCollectionSizes(env, dbMappings)
+                      .recover:
+                        case NonFatal(e) => logger.error(s"Failed to update mongo collection sizes for ${env.asString}", e)
+      _          <- mongoMetricsService
+                      .insertQueryLogs(env, dbMappings)
+                      .recover:
+                        case NonFatal(e) => logger.error(s"Failed to insert mongo query logs for ${env.asString}", e)
     yield ()

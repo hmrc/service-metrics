@@ -47,25 +47,70 @@ class ElasticsearchConnector @Inject()(
           String(Base64.getDecoder.decode(password)).trim // trim required since passwords were created with trailing \n
         env -> s"Basic ${String(Base64.getEncoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
 
-  def getSlowQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Option[MongoQueryLog]] =
+  def search(environment: Environment, query: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[SearchResult]] =
+    given Reads[Seq[SearchResult]] = SearchResult.reads
+    val url  = url"${elasticsearchConfig.elasticSearchBaseUrl.replace("$env", environment.asString)}/${elasticsearchConfig.mongoDbIndex}/_search/"
+    val body = Json.parse(s"""
+      {
+        "size": 0,
+        "query": {
+          "bool": {
+            "must": [
+              {
+                "query_string": {
+                  "query": "$query"
+                }
+              }
+            ],
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "format": "strict_date_optional_time",
+                    "gte": "$from",
+                    "lte": "$to"
+                  }
+                }
+              }
+            ]
+          }
+        }
+        "aggs": {
+          "term-count": {
+            "terms": { "field": "app.raw" }
+          }
+        }
+      }""")
+
+    httpClientV2
+      .post(url)
+      .setHeader:
+        "Authorization" -> basicAuthenticationCredentials(environment)
+      .withBody(body)
+      .execute[Seq[SearchResult]]
+      .recover: e =>
+        logger.error(s"Error getting mongo db logs for query '$query' from $url: ${e.getMessage}", e)
+        Nil
+
+  def getSlowQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[MongoCollectionNonPerformantQuery]] =
     getMongoDbLogs(
-      environment,
-      s"duration:>${elasticsearchConfig.longRunningQueryInMilliseconds}",
-      database,
-      from,
-      to
+      environment = environment
+    , query       = s"duration:>${elasticsearchConfig.longRunningQueryInMilliseconds}"
+    , database    = database
+    , from        = from
+    , to          = to
     )
 
-  def getNonIndexedQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Option[MongoQueryLog]] =
+  def getNonIndexedQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[MongoCollectionNonPerformantQuery]] =
     getMongoDbLogs(
-      environment,
-      "scan: COLLSCAN",
-      database,
-      from,
-      to
+      environment = environment
+    , query       = "scan: COLLSCAN"
+    , database    = database
+    , from        = from
+    , to          = to
     )
 
-  private def getMongoDbLogs(environment: Environment, query: String, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Option[MongoQueryLog]] =
+  private def getMongoDbLogs(environment: Environment, query: String, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[MongoCollectionNonPerformantQuery]] =
     given Reads[Seq[MongoCollectionNonPerformantQuery]] = MongoCollectionNonPerformantQuery.reads
 
     val body = Json.parse(s"""
@@ -110,6 +155,7 @@ class ElasticsearchConnector @Inject()(
         ]
       }""")
 
+
     val url = url"${elasticsearchConfig.elasticSearchBaseUrl.replace("$env", environment.asString)}/${elasticsearchConfig.mongoDbIndex}/_search/"
 
     httpClientV2
@@ -121,14 +167,6 @@ class ElasticsearchConnector @Inject()(
       .recover: e =>
         logger.error(s"Error getting mongo db logs for query '$query' from $url: ${e.getMessage}", e)
         Seq.empty
-      .map: nonPerformantQueries =>
-        Option.when(nonPerformantQueries.nonEmpty):
-          MongoQueryLog(
-            since                 = from,
-            timestamp             = to,
-            nonPerformantQueries  = nonPerformantQueries,
-            database              = database,
-          )
 
 
 object ElasticsearchConnector:
@@ -136,7 +174,7 @@ object ElasticsearchConnector:
   case class MongoCollectionNonPerformantQuery(
     collection : String,
     occurrences: Int,
-    duration   : Int,
+    avgDuration: Int,
   )
 
   object MongoCollectionNonPerformantQuery:
@@ -148,9 +186,12 @@ object ElasticsearchConnector:
         )(apply)
       (__ \ "aggregations" \ "collections" \ "buckets").read[Seq[MongoCollectionNonPerformantQuery]]
 
-  case class MongoQueryLog(
-    since               : Instant,
-    timestamp           : Instant,
-    nonPerformantQueries: Seq[MongoCollectionNonPerformantQuery],
-    database            : String,
-  )
+  case class SearchResult(key: String, count: Int)
+
+  object SearchResult:
+    val reads: Reads[Seq[SearchResult]] =
+      given Reads[SearchResult] =
+        ( (__ \ "key"      ).read[String]
+        ~ (__ \ "doc_count").read[Int]
+        )(apply)
+      (__ \ "aggregations" \ "term-count" \ "buckets").read[Seq[SearchResult]]

@@ -28,15 +28,14 @@ import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.{Service, ServiceName}
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository, MongoQueryNotificationRepository}
-import uk.gov.hmrc.servicemetrics.service.MongoService.DbMapping
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, MongoQueryLogHistoryRepository}
 
 import java.time.LocalDate
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import java.time.Instant
 
-class MongoServiceSpec
+class MongoMetricsServiceSpec
   extends AnyWordSpec
      with Matchers
      with MockitoSugar
@@ -52,10 +51,9 @@ class MongoServiceSpec
     val mockLatestRepository            = mock[LatestMongoCollectionSizeRepository]
     val mockHistoryRepository           = mock[MongoCollectionSizeHistoryRepository]
     val mockQueryLogHistoryRepository   = mock[MongoQueryLogHistoryRepository]
-    val mockQueryNotificationRepository = mock[MongoQueryNotificationRepository]
     val mockAppConfig                   = mock[AppConfig]
 
-    val service = MongoService(
+    val service = MongoMetricsService(
       mockCarbonApiConnector,
       mockClickHouseConnector,
       mockElasticsearchConnector,
@@ -64,21 +62,10 @@ class MongoServiceSpec
       mockLatestRepository,
       mockHistoryRepository,
       mockQueryLogHistoryRepository,
-      mockQueryNotificationRepository,
       mockAppConfig
     )
 
   given hc: HeaderCarrier = HeaderCarrier()
-
-  "updateCollectionSizes" should:
-    "leave the db unchanged if gathering metrics fails" in new Setup:
-      when(mockClickHouseConnector.getDatabaseNames(any[Environment])(using any[HeaderCarrier]))
-        .thenReturn(Future.failed(RuntimeException("test exception")))
-
-      service.updateCollectionSizes(Environment.QA).failed.futureValue shouldBe a[RuntimeException]
-
-      verify(mockClickHouseConnector, times(1)).getDatabaseNames(Environment.QA)(using hc)
-      verifyNoInteractions(mockLatestRepository)
 
   "insertQueryLogs" should:
     "insert mongodb logs" when:
@@ -99,21 +86,10 @@ class MongoServiceSpec
           .thenReturn(Future.successful(Seq.empty))
 
         when(mockElasticsearchConnector.getSlowQueries(any[Environment], any[String], any[Instant], any[Instant])(using any[HeaderCarrier]))
-          .thenReturn(Future.successful(Some(
-            ElasticsearchConnector.MongoQueryLog(
-              Instant.now(),
-              Instant.now(),
-              Seq(ElasticsearchConnector.MongoCollectionNonPerformantQuery(
-                "collection",
-                3001,
-                1,
-              )),
-              "database",
-            )
-          )))
+          .thenReturn(Future.successful(Seq(ElasticsearchConnector.MongoCollectionNonPerformantQuery("collection", 3001, 1))))
 
         when(mockElasticsearchConnector.getNonIndexedQueries(any[Environment], any[String], any[Instant], any[Instant])(using any[HeaderCarrier]))
-          .thenReturn(Future.successful(None))
+          .thenReturn(Future.successful(Nil))
 
         when(mockQueryLogHistoryRepository.insertMany(any[Seq[MongoQueryLogHistoryRepository.MongoQueryLogHistory]]))
           .thenReturn(Future.unit)
@@ -121,7 +97,7 @@ class MongoServiceSpec
         when(mockQueryLogHistoryRepository.lastInsertDate())
           .thenReturn(Future.successful(Some(Instant.now())))
 
-        service.insertQueryLogs(Environment.QA).futureValue shouldBe a[Unit]
+        service.insertQueryLogs(Environment.QA, service.dbMappings(Environment.QA).futureValue).futureValue shouldBe a[Unit]
 
         verify(mockClickHouseConnector, times(1))
           .getDatabaseNames(Environment.QA)(using hc)
@@ -194,10 +170,10 @@ class MongoServiceSpec
         .thenReturn(Future.successful(dbOverrides))
 
       val expected = Seq(
-        DbMapping(ServiceName("service-one"         ), "service-one"         , Seq("service-one-frontend"), Seq("team-one")),
-        DbMapping(ServiceName("service-one-frontend"), "service-one-frontend", Seq.empty                  , Seq("team-one")),
-        DbMapping(ServiceName("service-two"         ), "service-two"         , Seq.empty                  , Seq("team-two")),
-        DbMapping(ServiceName("service-three"       ), "random-db"           , Seq.empty                  , Seq("team-three"))
+        MongoMetricsService.DbMapping(ServiceName("service-one"         ), "service-one"         , Seq("service-one-frontend"), Seq("team-one")),
+        MongoMetricsService.DbMapping(ServiceName("service-one-frontend"), "service-one-frontend", Seq.empty                  , Seq("team-one")),
+        MongoMetricsService.DbMapping(ServiceName("service-two"         ), "service-two"         , Seq.empty                  , Seq("team-two")),
+        MongoMetricsService.DbMapping(ServiceName("service-three"       ), "random-db"           , Seq.empty                  , Seq("team-three"))
       )
 
-      service.getMappings(Environment.QA).futureValue should contain theSameElementsAs expected
+      service.dbMappings(Environment.QA).futureValue should contain theSameElementsAs expected

@@ -18,32 +18,32 @@ package uk.gov.hmrc.servicemetrics.scheduler
 
 import cats.implicits._
 import org.apache.pekko.actor.ActorSystem
-import play.api.Logger
+import play.api.{Configuration, Logger}
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.mongo.lock.{LockService, MongoLockRepository}
-import uk.gov.hmrc.servicemetrics.config.{SchedulerConfigs}
 import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository.{MongoQueryLogHistory, MongoQueryType}
-import uk.gov.hmrc.servicemetrics.persistence.MongoQueryNotificationRepository.MongoQueryNotification
-import uk.gov.hmrc.servicemetrics.service.MongoService
+import uk.gov.hmrc.servicemetrics.persistence.MongoQueryNotificationRepository
+import uk.gov.hmrc.servicemetrics.service.MongoMetricsService
 
 import java.net.URLEncoder
 import java.time.{DayOfWeek, Instant, LocalDateTime}
 import java.time.temporal.ChronoUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration.DurationInt
+import uk.gov.hmrc.servicemetrics.persistence.MongoQueryNotificationRepository.MongoQueryNotification
 
 @Singleton
 class MongoNotificationsScheduler  @Inject()(
-  schedulerConfig            : SchedulerConfigs
-, lockRepository             : MongoLockRepository
-, mongoService               : MongoService
-, slackNotificationsConnector: SlackNotificationsConnector
-, slackNotificationsConfig   : SlackNotificationsConfig
+  configuration                   : Configuration
+, lockRepository                  : MongoLockRepository
+, mongoMetricsService             : MongoMetricsService
+, slackNotificationsConnector     : SlackNotificationsConnector
+, slackNotificationsConfig        : SlackNotificationsConfig
+, mongoQueryNotificationRepository: MongoQueryNotificationRepository
 )(using
   ActorSystem
 , ApplicationLifecycle
@@ -54,10 +54,13 @@ class MongoNotificationsScheduler  @Inject()(
 
   private given HeaderCarrier = HeaderCarrier()
 
+  private val schedulerConfig =
+    SchedulerConfig(configuration, "mongo-notifications-scheduler")
+
   scheduleWithLock(
-    label           = "MongoNotificationsScheduler",
-    schedulerConfig = schedulerConfig.mongoNotificationsScheduler,
-    lock            = LockService(lockRepository, "mongo-notifications-scheduler", 30.minutes)
+    label           = "MongoNotificationsScheduler"
+  , schedulerConfig = schedulerConfig
+  , lock            = LockService(lockRepository, "mongo-notifications-scheduler", schedulerConfig.interval)
   ):
     val envs: List[Environment] =
       Environment.values.toList.filterNot(_.equals(Environment.Integration))
@@ -89,29 +92,29 @@ class MongoNotificationsScheduler  @Inject()(
     to  : Instant,
   ) =
     for
-      nonPerformantQueries    <- mongoService.getAllQueriesGroupedByTeam(env, from, to)
+      nonPerformantQueries    <- mongoMetricsService.getAllQueriesGroupedByTeam(env, from, to)
       notificationData        <- nonPerformantQueries.toSeq.foldLeftM[Future, Seq[(String, Seq[MongoQueryLogHistory])]](Seq.empty):
                                    case (acc, (team, notificationData)) =>
-                                     mongoService.hasBeenNotified(team).map: hasBeenNotified =>
+                                     mongoQueryNotificationRepository.hasBeenNotified(team).map: hasBeenNotified =>
                                        if hasBeenNotified then
                                          logger.info(s"Notifications for team '$team' were already triggered.")
                                          acc
                                        else
                                          acc :+ (team, notificationData)
-      mongoQueryNotifications <- notificationData.foldLeftM[Future, Seq[MongoQueryNotification]](Seq.empty):
+      mongoQueryNotifications <- notificationData.foldLeftM[Future, Seq[MongoQueryNotificationRepository.MongoQueryNotification]](Seq.empty):
                                    case (acc, (team, notifications)) =>
                                      if slackNotificationsConfig.notifyTeams || slackNotificationsConfig.notificationChannels.nonEmpty then
                                        val notificationChannelsLookup = Option.when(slackNotificationsConfig.notificationChannels.nonEmpty)(ChannelLookup.SlackChannels(slackNotificationsConfig.notificationChannels))
                                        val teamChannelLookup          = Option.when(slackNotificationsConfig.notifyTeams)(ChannelLookup.GithubTeam(team))
                                        (notificationChannelsLookup ++ teamChannelLookup).toList
-                                         .foldLeftM[Future, Seq[MongoQueryNotification]](acc): (a, cl) =>
+                                         .foldLeftM[Future, Seq[MongoQueryNotificationRepository.MongoQueryNotification]](acc): (a, cl) =>
                                            notifyChannel(cl, notifications, team, env).map(_ ++ a)
                                      else
                                        logger.info(s"Detected non-performant queries for team '$team'")
                                        Future.successful(acc)
       _                       <-
                                  if mongoQueryNotifications.nonEmpty then
-                                   mongoService.flagAsNotified(mongoQueryNotifications)
+                                   mongoQueryNotificationRepository.flagAsNotified(mongoQueryNotifications)
                                  else
                                    Future.unit
     yield ()
@@ -121,7 +124,7 @@ class MongoNotificationsScheduler  @Inject()(
     notifications: Seq[MongoQueryLogHistory],
     team         : String,
     env          : Environment,
-  ): Future[Seq[MongoQueryNotification]] =
+  ): Future[Seq[MongoQueryNotificationRepository.MongoQueryNotification]] =
     val initialMessage = s"""Hi *$team*, we have seen the following non-performant queries""".stripMargin
     val messages =
       notifications
@@ -143,7 +146,8 @@ class MongoNotificationsScheduler  @Inject()(
       blocks        = SlackNotificationRequest.toBlocks(messages)
     )
 
-    slackNotificationsConnector.sendMessage(request)
+    slackNotificationsConnector
+      .sendMessage(request)
       .collect:
         case response if response.errors.isEmpty =>
           logger.info(s"Creating notification to save $team $notifications")

@@ -55,7 +55,7 @@ class MongoQueryNotificationRepository @Inject()(
   extraCodecs    = Seq(Codecs.playFormatCodec(MongoQueryType.format))
 ):
 
-  def insertMany(notifications: Seq[MongoQueryNotification]): Future[Unit] =
+  def flagAsNotified(notifications: Seq[MongoQueryNotification]): Future[Unit] =
     collection.insertMany(notifications).toFuture().map(_ => ())
 
   def hasBeenNotified(team: String): Future[Boolean] =

@@ -31,12 +31,11 @@ import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.mongo.lock.MongoLockRepository
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.config.{SchedulerConfig, SchedulerConfigs}
 import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.persistence.{MongoQueryLogHistoryRepository, MongoQueryNotificationRepository}
-import uk.gov.hmrc.servicemetrics.service.MongoService
+import uk.gov.hmrc.servicemetrics.service.MongoMetricsService
 
 import java.time._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -67,11 +66,11 @@ class MongoNotificationsSchedulerSpec
           to
         ).futureValue
 
-        verify(mockMongoService, times(1))
+        verify(mockMongoMetricsService, times(1))
           .getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
-        verify(mockMongoService, times(1))
+        verify(mockMongoQueryNotificationRepository, times(1))
           .hasBeenNotified(any[String])
-        verify(mockMongoService, times(1))
+        verify(mockMongoQueryNotificationRepository, times(1))
           .flagAsNotified(any[Seq[MongoQueryNotificationRepository.MongoQueryNotification]])
         verify(mockSlackNotificationsConnector, times(2))
           .sendMessage(any[SlackNotificationRequest])(using any[HeaderCarrier])
@@ -88,9 +87,9 @@ class MongoNotificationsSchedulerSpec
           to
         ).futureValue
 
-        verify(mockMongoService, times(1))
+        verify(mockMongoMetricsService, times(1))
           .getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
-        verify(mockMongoService, times(0))
+        verify(mockMongoQueryNotificationRepository, times(0))
           .hasBeenNotified(any[String])
         verify(mockSlackNotificationsConnector, times(0))
           .sendMessage(any[SlackNotificationRequest])(using any[HeaderCarrier])
@@ -109,9 +108,9 @@ class MongoNotificationsSchedulerSpec
           to
         ).futureValue
 
-        verify(mockMongoService, times(1))
+        verify(mockMongoMetricsService, times(1))
           .getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
-        verify(mockMongoService, times(1))
+        verify(mockMongoQueryNotificationRepository, times(1))
           .hasBeenNotified(any[String])
         verify(mockSlackNotificationsConnector, times(0))
           .sendMessage(any[SlackNotificationRequest])(using any[HeaderCarrier])
@@ -131,9 +130,9 @@ class MongoNotificationsSchedulerSpec
           to
         ).futureValue
 
-        verify(mockMongoService, times(1))
+        verify(mockMongoMetricsService, times(1))
           .getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
-        verify(mockMongoService, times(1))
+        verify(mockMongoQueryNotificationRepository, times(1))
           .hasBeenNotified(any[String])
         verify(mockSlackNotificationsConnector, times(0))
           .sendMessage(any[SlackNotificationRequest])(using any[HeaderCarrier])
@@ -153,9 +152,9 @@ class MongoNotificationsSchedulerSpec
           to
         ).futureValue
 
-        verify(mockMongoService, times(1))
+        verify(mockMongoMetricsService, times(1))
           .getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant])
-        verify(mockMongoService, times(1))
+        verify(mockMongoQueryNotificationRepository, times(1))
           .hasBeenNotified(any[String])
         verify(mockSlackNotificationsConnector, times(1))
           .sendMessage(any[SlackNotificationRequest])(using any[HeaderCarrier])
@@ -205,12 +204,6 @@ class MongoNotificationsSchedulerSpec
       )
 
     val config = Configuration(ConfigFactory.parseString(s"""
-      |mongo-metrics-scheduler {
-      |  enabled      = true
-      |  interval     = 1.hour
-      |  initialDelay = 1.second
-      |}
-      |
       |mongo-notifications-scheduler {
       |  enabled      = true
       |  interval     = 1.day
@@ -233,24 +226,21 @@ class MongoNotificationsSchedulerSpec
       |    }
       |  }
       |}
-      |feature {
-      |  collect-non-performant-queries-enabled = false
-      |}
       |""".stripMargin))
 
-    val schedulerConfigs                = SchedulerConfigs(config)
-    val mockMongoLockRepository         = mock[MongoLockRepository]
-    val mockMongoService                = mock[MongoService]
-    val mockSlackNotificationsConnector = mock[SlackNotificationsConnector]
-    val mockServicesConfig              = mock[ServicesConfig]
-    val slackNotificationsConfig        = SlackNotificationsConfig(config, mockServicesConfig)
+    val mockMongoLockRepository              = mock[MongoLockRepository]
+    val mockMongoMetricsService              = mock[MongoMetricsService]
+    val mockSlackNotificationsConnector      = mock[SlackNotificationsConnector]
+    val mockServicesConfig                   = mock[ServicesConfig]
+    val mockMongoQueryNotificationRepository = mock[MongoQueryNotificationRepository]
 
     val scheduler = MongoNotificationsScheduler(
-      schedulerConfig             = schedulerConfigs,
-      lockRepository              = mockMongoLockRepository,
-      mongoService                = mockMongoService,
-      slackNotificationsConnector = mockSlackNotificationsConnector,
-      slackNotificationsConfig    = slackNotificationsConfig,
+      configuration                    = config
+    , slackNotificationsConfig         = SlackNotificationsConfig(config, mockServicesConfig)
+    , lockRepository                   = mockMongoLockRepository
+    , mongoMetricsService              = mockMongoMetricsService
+    , slackNotificationsConnector      = mockSlackNotificationsConnector
+    , mongoQueryNotificationRepository = mockMongoQueryNotificationRepository
     )
 
     val queries: Map[String, Seq[MongoQueryLogHistoryRepository.MongoQueryLogHistory]] =
@@ -272,13 +262,13 @@ class MongoNotificationsSchedulerSpec
       else
         Map.empty
 
-    when(mockMongoService.getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant]))
+    when(mockMongoMetricsService.getAllQueriesGroupedByTeam(any[Environment], any[Instant], any[Instant]))
       .thenReturn(Future.successful(queries))
 
-    when(mockMongoService.hasBeenNotified(any[String]))
+    when(mockMongoQueryNotificationRepository.hasBeenNotified(any[String]))
       .thenReturn(Future.successful(hasBeenNotified))
 
-    when(mockMongoService.flagAsNotified(any[Seq[MongoQueryNotificationRepository.MongoQueryNotification]]))
+    when(mockMongoQueryNotificationRepository.flagAsNotified(any[Seq[MongoQueryNotificationRepository.MongoQueryNotification]]))
       .thenReturn(Future.unit)
 
     when(mockSlackNotificationsConnector.sendMessage(any[SlackNotificationRequest])(using any[HeaderCarrier]))

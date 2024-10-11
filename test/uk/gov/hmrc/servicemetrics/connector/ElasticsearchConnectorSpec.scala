@@ -61,7 +61,6 @@ class ElasticsearchConnectorSpec
     )
 
   private val mongoDbLogsIndex = "mongodb-logs"
-  private val mongoDbDatabase  = "preferences"
   private val now              = Instant.now()
 
   private val connector =
@@ -95,7 +94,7 @@ class ElasticsearchConnectorSpec
                         "sum_other_doc_count": 6,
                         "buckets": [
                           {
-                            "key": "preferences",
+                            "key": "some-collection-name",
                             "doc_count": 1,
                             "avg_duration": {
                               "value": 10121.309582309583
@@ -107,18 +106,12 @@ class ElasticsearchConnectorSpec
                   }"""
                 )
 
-        val expectedResult = MongoQueryLog(
-            since                = now,
-            timestamp            = now,
-            database             = mongoDbDatabase,
-            nonPerformantQueries = Seq(MongoCollectionNonPerformantQuery(
-              collection  = "preferences",
-              occurrences = 1,
-              duration    = 10121,
-            ))
+        connector
+          .getSlowQueries(Environment.QA, "some-db-name", now.minusSeconds(1000), now)
+          .futureValue shouldBe Seq(
+            MongoCollectionNonPerformantQuery(
+              collection  = "some-collection-name"
+            , occurrences = 1
+            , avgDuration = 10121
+            )
           )
-
-        val mongoDbLog = connector.getSlowQueries(Environment.QA, "preferences", now.minusSeconds(1000), now).futureValue.head
-
-        mongoDbLog.database shouldBe expectedResult.database
-        mongoDbLog.nonPerformantQueries should contain theSameElementsAs expectedResult.nonPerformantQueries

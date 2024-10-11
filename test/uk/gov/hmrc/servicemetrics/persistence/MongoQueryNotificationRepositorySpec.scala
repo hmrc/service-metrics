@@ -59,6 +59,6 @@ class MongoQueryNotificationRepositorySpec
         val team        = "team"
         val environment = Environment.QA
 
-        repository.insertMany(seed(environment)).futureValue
+        repository.flagAsNotified(seed(environment)).futureValue
 
         repository.hasBeenNotified(team).futureValue shouldBe true

@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
-import MongoQueryLogHistoryRepository._
+import MongoQueryLogHistoryRepository.{MongoQueryLogHistory, MongoQueryType, NonPerformantQueries}
 
 @Singleton
 class MongoQueryLogHistoryRepository @Inject()(

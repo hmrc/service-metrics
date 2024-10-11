@@ -20,8 +20,7 @@ import play.api.libs.json.{Json, Writes}
 import play.api.mvc.{Action, AnyContent, ControllerComponents}
 import uk.gov.hmrc.play.bootstrap.backend.controller.BackendController
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.MongoQueryLogHistoryRepository._
-import uk.gov.hmrc.servicemetrics.service.MongoService
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoQueryLogHistoryRepository}
 
 import javax.inject.{Inject, Singleton}
 import java.time.Instant
@@ -29,8 +28,9 @@ import scala.concurrent.ExecutionContext
 
 @Singleton()
 class MongoMetricsController @Inject()(
-  cc                : ControllerComponents
-, mongoMetricService: MongoService
+  cc                       : ControllerComponents
+, latestRepository         : LatestMongoCollectionSizeRepository
+, queryLogHistoryRepository: MongoQueryLogHistoryRepository
 )(using
   ExecutionContext
 ) extends BackendController(cc):
@@ -38,7 +38,8 @@ class MongoMetricsController @Inject()(
   def getCollections(service: String, environment: Option[Environment]): Action[AnyContent] =
     Action.async:
       given Writes[MongoCollectionSize] = MongoCollectionSize.apiWrites
-      mongoMetricService.getCollections(service, environment)
+      latestRepository
+        .find(service, environment)
         .map(mcs => Ok(Json.toJson(mcs)))
 
   def nonPerformantQueriesByService(
@@ -47,11 +48,7 @@ class MongoMetricsController @Inject()(
     to         : Instant
   ): Action[AnyContent] =
     Action.async:
-      given Writes[NonPerformantQueries] = NonPerformantQueries.format
-      mongoMetricService
-        .nonPerformantQueriesByService(
-          service,
-          from,
-          to
-        )
+      given Writes[MongoQueryLogHistoryRepository.NonPerformantQueries] = MongoQueryLogHistoryRepository.NonPerformantQueries.format
+      queryLogHistoryRepository
+        .getQueryTypesByService(service, from, to)
         .map(nonPerformantQueries => Ok(Json.toJson(nonPerformantQueries)))
