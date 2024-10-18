@@ -25,7 +25,6 @@ import play.api.Configuration
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.config.ElasticsearchConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
@@ -63,10 +62,55 @@ class ElasticsearchConnectorSpec
   private val mongoDbLogsIndex = "mongodb-logs"
   private val now              = Instant.now()
 
-  private val connector =
-    ElasticsearchConnector(httpClientV2, ElasticsearchConfig(config, ServicesConfig(config)))
+  private val connector = ElasticsearchConnector(ServicesConfig(config), httpClientV2)
 
-  "getMongoDbLogs" should:
+  "search" should:
+    "return logs" in:
+        stubFor:
+          post(urlPathEqualTo(s"/$mongoDbLogsIndex/_search/"))
+            .willReturn:
+              aResponse()
+                .withStatus(200)
+                .withBody("""
+                  {
+                    "took": 7,
+                    "timed_out": false,
+                    "_shards": {
+                      "total": 5,
+                      "successful": 5,
+                      "skipped": 0,
+                      "failed": 0
+                    },
+                    "hits": {
+                      "total": 1,
+                      "max_score": 3.321853,
+                      "hits": []
+                    },
+                    "aggregations": {
+                      "term-count": {
+                        "doc_count_error_upper_bound": 0,
+                        "sum_other_doc_count": 6,
+                        "buckets": [
+                          {
+                            "key": "app.raw",
+                            "doc_count": 1
+                          }
+                        ]
+                      }
+                    }
+                  }"""
+                )
+
+        connector
+          .search(Environment.QA, "tags.raw:\\\"UnsafeContent\\\"", now.minusSeconds(1000), now)
+          .futureValue shouldBe Seq(
+            SearchResult(
+              key   = "app.raw"
+            , count = 1
+            )
+          )
+
+  "averageMongoDuration" should:
     "return mongo logs" in:
         stubFor:
           post(urlPathEqualTo(s"/$mongoDbLogsIndex/_search/"))
@@ -89,7 +133,7 @@ class ElasticsearchConnectorSpec
                       "hits": []
                     },
                     "aggregations": {
-                      "collections": {
+                      "mongo": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 6,
                         "buckets": [
@@ -107,9 +151,9 @@ class ElasticsearchConnectorSpec
                 )
 
         connector
-          .getSlowQueries(Environment.QA, "some-db-name", now.minusSeconds(1000), now)
+          .averageMongoDuration(Environment.QA, query = "some.raw:'Foo'", database = "some-db-name", now.minusSeconds(1000), now)
           .futureValue shouldBe Seq(
-            MongoCollectionNonPerformantQuery(
+            AverageMongoDuration(
               collection  = "some-collection-name"
             , occurrences = 1
             , avgDuration = 10121
