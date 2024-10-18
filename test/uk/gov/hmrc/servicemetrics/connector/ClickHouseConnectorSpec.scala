@@ -17,14 +17,13 @@
 package uk.gov.hmrc.servicemetrics.connector
 
 import com.github.tomakehurst.wiremock.client.WireMock.{aResponse, get, stubFor, urlEqualTo}
-import org.mockito.Mockito.when
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatestplus.mockito.MockitoSugar
+import play.api.Configuration
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
-import uk.gov.hmrc.servicemetrics.config.ClickHouseConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -39,16 +38,16 @@ class ClickHouseConnectorSpec
 
   private given HeaderCarrier = HeaderCarrier()
 
-  private val mockConfig = mock[ClickHouseConfig]
-
-  when(mockConfig.urls)
-    .thenReturn:
-      Environment.values
-        .filterNot(_ == Environment.Integration)
-        .map(env => env -> wireMockUrl)
-        .toMap
-
-  val connector = ClickHouseConnector(httpClientV2, mockConfig)
+  val connector = ClickHouseConnector(
+    Configuration(
+       "clickhouse.development.url"  -> wireMockUrl
+     , "clickhouse.qa.url"           -> wireMockUrl
+     , "clickhouse.staging.url"      -> wireMockUrl
+     , "clickhouse.externaltest.url" -> wireMockUrl
+     , "clickhouse.production.url"   -> wireMockUrl
+    )
+  , httpClientV2
+  )
 
   "getDatabaseNames" should:
     "return a list of database names" in:
