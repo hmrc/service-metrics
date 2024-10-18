@@ -38,7 +38,7 @@ object MongoCollectionSize:
     ~ (__ \ "collection" ).format[String]
     ~ (__ \ "sizeBytes"  ).format[BigDecimal]
     ~ (__ \ "date"       ).format[LocalDate](MongoJavatimeFormats.localDateFormat)
-    ~ (__ \ "environment").format[Environment](Environment.format)
+    ~ (__ \ "environment").format[Environment]
     ~ (__ \ "service"    ).format[String]
     )(apply, o => Tuple.fromProductTyped(o))
 
@@ -47,6 +47,6 @@ object MongoCollectionSize:
     ~ (__ \ "collection" ).write[String]
     ~ (__ \ "sizeBytes"  ).write[BigDecimal]
     ~ (__ \ "date"       ).write[LocalDate]
-    ~ (__ \ "environment").write[Environment](Environment.format)
+    ~ (__ \ "environment").write[Environment]
     ~ (__ \ "service"    ).write[String]
     )(o => Tuple.fromProductTyped(o))
