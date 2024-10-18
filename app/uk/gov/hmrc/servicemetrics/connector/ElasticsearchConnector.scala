@@ -22,169 +22,128 @@ import play.api.libs.ws.writeableOf_JsValue
 import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
-import uk.gov.hmrc.servicemetrics.config.ElasticsearchConfig
+import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
 import javax.inject.{Inject, Singleton}
-import scala.concurrent.{ExecutionContext, Future}
 import java.util.Base64
+import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class ElasticsearchConnector @Inject()(
-  httpClientV2 : HttpClientV2
-, elasticsearchConfig: ElasticsearchConfig
+  servicesConfig: uk.gov.hmrc.play.bootstrap.config.ServicesConfig
+, httpClientV2  : HttpClientV2
 )(using
   ExecutionContext
 ) extends play.api.Logging:
 
   import ElasticsearchConnector._
 
-  private val basicAuthenticationCredentials =
-    elasticsearchConfig.environmentPasswords
+  private val baseUrl: String =
+    servicesConfig.baseUrl("elasticsearch")
+
+  private val username: String =
+    servicesConfig.getString("microservice.services.elasticsearch.username")
+
+  private val mongoDbIndex: String =
+    servicesConfig.getString("microservice.services.elasticsearch.mongodb-index")
+
+  private val environmentBasicAuthenticationCredentials: Map[Environment, String] =
+    Environment
+      .values
+      .filterNot(_ == Environment.Integration)
+      .map: env =>
+        env -> servicesConfig.getString(s"microservice.services.elasticsearch.${env.asString}.password")
       .map: (env, password) =>
-        val decodedPassword =
-          String(Base64.getDecoder.decode(password)).trim // trim required since passwords were created with trailing \n
-        env -> s"Basic ${String(Base64.getEncoder.encode(s"${elasticsearchConfig.username}:$decodedPassword".getBytes()))}"
+        val decodedPassword = String(Base64.getDecoder.decode(password)).trim // trim required since passwords were created with trailing \n
+        env -> s"Basic ${String(Base64.getEncoder.encode(s"$username:$decodedPassword".getBytes()))}"
+      .toMap
 
   def search(environment: Environment, query: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[SearchResult]] =
     given Reads[Seq[SearchResult]] = SearchResult.reads
-    val url  = url"${elasticsearchConfig.elasticSearchBaseUrl.replace("$env", environment.asString)}/${elasticsearchConfig.mongoDbIndex}/_search/"
-    val body = Json.parse(s"""
-      {
-        "size": 0,
-        "query": {
-          "bool": {
-            "must": [
-              {
-                "query_string": {
-                  "query": "$query"
-                }
-              }
-            ],
-            "filter": [
-              {
-                "range": {
-                  "@timestamp": {
-                    "format": "strict_date_optional_time",
-                    "gte": "$from",
-                    "lte": "$to"
-                  }
-                }
-              }
-            ]
-          }
-        }
-        "aggs": {
-          "term-count": {
-            "terms": { "field": "app.raw" }
-          }
-        }
-      }""")
-
+    val url  = url"${baseUrl.replace("$env", environment.asString)}/$mongoDbIndex/_search/"
     httpClientV2
       .post(url)
       .setHeader:
-        "Authorization" -> basicAuthenticationCredentials(environment)
-      .withBody(body)
+        "Authorization" -> environmentBasicAuthenticationCredentials(environment)
+      .withBody(Json.parse(s"""
+        { "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "query_string": { "query": "$query" } }
+              ],
+              "filter": [
+                { "range": { "@timestamp": { "format": "strict_date_optional_time", "gte": "$from", "lte": "$to" } } }
+              ]
+            }
+          }
+          "aggs": {
+            "term-count": {
+              "terms": { "field": "app.raw" }
+            }
+          }
+        }""")
+      )
       .execute[Seq[SearchResult]]
       .recover: e =>
         logger.error(s"Error getting mongo db logs for query '$query' from $url: ${e.getMessage}", e)
         Nil
 
-  def getSlowQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[MongoCollectionNonPerformantQuery]] =
-    getMongoDbLogs(
-      environment = environment
-    , query       = s"duration:>${elasticsearchConfig.longRunningQueryInMilliseconds}"
-    , database    = database
-    , from        = from
-    , to          = to
-    )
-
-  def getNonIndexedQueries(environment: Environment, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[MongoCollectionNonPerformantQuery]] =
-    getMongoDbLogs(
-      environment = environment
-    , query       = "scan: COLLSCAN"
-    , database    = database
-    , from        = from
-    , to          = to
-    )
-
-  private def getMongoDbLogs(environment: Environment, query: String, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[MongoCollectionNonPerformantQuery]] =
-    given Reads[Seq[MongoCollectionNonPerformantQuery]] = MongoCollectionNonPerformantQuery.reads
-
-    val body = Json.parse(s"""
-      {
-        "size": 0,
-        "query": {
-          "bool": {
-            "must": [
-              {
-                "query_string": {
-                  "query": "type:mongodb AND NOT mongo_db:(\\\"backup_mongo\\\"|\\\"backup_protected-mongo\\\"|\\\"backup_protected-auth-mongo\\\"|\\\"backup_protected-centralised-auth-mongo\\\"|\\\"backup_protected-rate-mongo\\\"|\\\"backup_public-mongo\\\") AND $query AND  database.raw:\\\"$database\\\""
-                }
-              }
-            ],
-            "filter": [
-              {
-                "range": {
-                  "@timestamp": {
-                    "format": "strict_date_optional_time",
-                    "gte": "$from",
-                    "lte": "$to"
-                  }
-                }
-              }
-            ]
-          }
-        },
-        "aggs": {
-          "collections": {
-            "terms": { "field": "collection.raw" },
-            "aggs": {
-              "avg_duration" : { "avg" : { "field" : "duration" } }
-            }
-          }
-        },
-        "sort": [
-          {
-            "@timestamp": {
-              "order": "desc"
-            }
-          }
-        ]
-      }""")
-
-
-    val url = url"${elasticsearchConfig.elasticSearchBaseUrl.replace("$env", environment.asString)}/${elasticsearchConfig.mongoDbIndex}/_search/"
-
+  def averageMongoDuration(environment: Environment, query: String, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[AverageMongoDuration]] =
+    given Reads[Seq[AverageMongoDuration]] = AverageMongoDuration.reads
+    val url = url"${baseUrl.replace("$env", environment.asString)}/$mongoDbIndex/_search/"
     httpClientV2
       .post(url)
       .setHeader:
-        "Authorization" -> basicAuthenticationCredentials(environment)
-      .withBody(body)
-      .execute[Seq[MongoCollectionNonPerformantQuery]]
+        "Authorization" -> environmentBasicAuthenticationCredentials(environment)
+      .withBody(Json.parse(s"""
+        { "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                { "query_string": { "query": "type:mongodb AND NOT mongo_db:('backup_mongo'|'backup_protected-mongo'|'backup_protected-auth-mongo'|'backup_protected-centralised-auth-mongo'|'backup_protected-rate-mongo'|'backup_public-mongo') AND $query AND database.raw:'$database'" } }
+              ],
+              "filter": [
+                { "range": { "@timestamp": { "format": "strict_date_optional_time", "gte": "$from", "lte": "$to" } } }
+              ]
+            }
+          },
+          "aggs": {
+            "mongo": {
+              "terms": { "field": "collection.raw" },
+              "aggs": {
+                "avg_duration" : { "avg" : { "field" : "duration" } }
+              }
+            }
+          },
+          "sort": [
+            {  "@timestamp": { "order": "desc" } }
+          ]
+        }""")
+      )
+      .execute[Seq[AverageMongoDuration]]
       .recover: e =>
         logger.error(s"Error getting mongo db logs for query '$query' from $url: ${e.getMessage}", e)
         Seq.empty
 
-
 object ElasticsearchConnector:
 
-  case class MongoCollectionNonPerformantQuery(
+  case class AverageMongoDuration(
     collection : String,
     occurrences: Int,
     avgDuration: Int,
   )
 
-  object MongoCollectionNonPerformantQuery:
-    val reads: Reads[Seq[MongoCollectionNonPerformantQuery]] =
-      given Reads[MongoCollectionNonPerformantQuery] =
+  object AverageMongoDuration:
+    val reads: Reads[Seq[AverageMongoDuration]] =
+      given Reads[AverageMongoDuration] =
         ( (__ \ "key"                   ).read[String]
         ~ (__ \ "doc_count"             ).read[Int]
         ~ (__ \ "avg_duration" \ "value").read[Double].map(_.toInt)
         )(apply)
-      (__ \ "aggregations" \ "collections" \ "buckets").read[Seq[MongoCollectionNonPerformantQuery]]
+      (__ \ "aggregations" \ "mongo" \ "buckets").read[Seq[AverageMongoDuration]]
 
   case class SearchResult(key: String, count: Int)
 

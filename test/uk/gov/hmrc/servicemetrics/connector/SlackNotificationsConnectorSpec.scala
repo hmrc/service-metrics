@@ -17,15 +17,15 @@
 package uk.gov.hmrc.servicemetrics.connector
 
 import com.github.tomakehurst.wiremock.client.WireMock._
-import org.mockito.Mockito.when
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatestplus.mockito.MockitoSugar
+import play.api.Configuration
 import play.api.libs.json.Json
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
-import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
+import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -40,12 +40,15 @@ class SlackNotificationsConnectorSpec
 
   given HeaderCarrier = HeaderCarrier()
 
-  private val mockConfig: SlackNotificationsConfig = mock[SlackNotificationsConfig]
-
-  when(mockConfig.url)
-    .thenReturn(wireMockUrl)
-
-  private val connector = SlackNotificationsConnector(httpClientV2, mockConfig)
+  private lazy val connector =
+    SlackNotificationsConnector(
+      ServicesConfig(Configuration(
+        "microservice.services.slack-notifications.port" -> wireMockPort
+      , "microservice.services.slack-notifications.host" -> wireMockHost
+      , "alerts.slack.auth-token"                        -> "changeme"
+      ))
+    , httpClientV2
+    )
 
   "allServices" should:
     "return list of service names" in:
@@ -54,10 +57,10 @@ class SlackNotificationsConnectorSpec
           .willReturn:
             aResponse()
               .withStatus(200)
-              .withBody("""{"errors": [{"code": "c", "message": "m"}]}""")
+              .withBody("""{"errors": []}""")
 
-      val message = SlackNotificationRequest(
-        channelLookup = ChannelLookup.GithubTeam("team1"),
+      val message = SlackNotificationsConnector.Request(
+        channelLookup = SlackNotificationsConnector.ChannelLookup.GithubTeam("team1"),
         displayName   = "displayName",
         emoji         = "emoji",
         text          = "text",
@@ -75,12 +78,7 @@ class SlackNotificationsConnectorSpec
 
       val response = connector.sendMessage(message).futureValue
 
-      response shouldBe SlackNotificationResponse(
-        errors = Seq(SlackNotificationError(
-                   code    =  "c",
-                   message =  "m"
-                 ))
-      )
+      response shouldBe ()
 
       verify(
         postRequestedFor(urlEqualTo("/slack-notifications/v2/notification"))

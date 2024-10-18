@@ -25,7 +25,6 @@ import play.api.Configuration
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.config.ElasticsearchConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
@@ -63,8 +62,7 @@ class ElasticsearchConnectorSpec
   private val mongoDbLogsIndex = "mongodb-logs"
   private val now              = Instant.now()
 
-  private val connector =
-    ElasticsearchConnector(httpClientV2, ElasticsearchConfig(config, ServicesConfig(config)))
+  private val connector = ElasticsearchConnector(ServicesConfig(config), httpClientV2)
 
   "getMongoDbLogs" should:
     "return mongo logs" in:
@@ -89,7 +87,7 @@ class ElasticsearchConnectorSpec
                       "hits": []
                     },
                     "aggregations": {
-                      "collections": {
+                      "mongo": {
                         "doc_count_error_upper_bound": 0,
                         "sum_other_doc_count": 6,
                         "buckets": [
@@ -107,9 +105,9 @@ class ElasticsearchConnectorSpec
                 )
 
         connector
-          .getSlowQueries(Environment.QA, "some-db-name", now.minusSeconds(1000), now)
+          .averageMongoDuration(Environment.QA, "some-db-name", "some-query", now.minusSeconds(1000), now)
           .futureValue shouldBe Seq(
-            MongoCollectionNonPerformantQuery(
+            AverageMongoDuration(
               collection  = "some-collection-name"
             , occurrences = 1
             , avgDuration = 10121
