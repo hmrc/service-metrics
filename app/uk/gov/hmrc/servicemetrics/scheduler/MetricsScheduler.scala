@@ -23,17 +23,20 @@ import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.mongo.lock.{LockService, MongoLockRepository}
 import uk.gov.hmrc.servicemetrics.model.Environment
-import uk.gov.hmrc.servicemetrics.service.MongoMetricsService
+import uk.gov.hmrc.servicemetrics.service.MetricsService
 
 import javax.inject.{Inject, Singleton}
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.Service
 
 @Singleton
-class MongoMetricsScheduler @Inject()(
-  configuration      : Configuration
-, lockRepository     : MongoLockRepository
-, mongoMetricsService: MongoMetricsService
+class MetricsScheduler @Inject()(
+  configuration : Configuration
+, lockRepository: MongoLockRepository
+, metricsService: MetricsService
 )(using
   ActorSystem
 , ApplicationLifecycle
@@ -45,29 +48,32 @@ class MongoMetricsScheduler @Inject()(
   private given HeaderCarrier = HeaderCarrier()
 
   private val schedulerConfig: SchedulerConfig =
-    SchedulerConfig(configuration, "mongo-metrics-scheduler")
+    SchedulerConfig(configuration, "scheduler.metrics")
 
   scheduleWithLock(
-    label           = "MongoMetricsScheduler"
+    label           = "Metrics Scheduler"
   , schedulerConfig = schedulerConfig
-  , lock            = LockService(lockRepository, "mongo-metrics-scheduler", schedulerConfig.interval)
+  , lock            = LockService(lockRepository, "metrics-scheduler", schedulerConfig.interval)
   ):
-    val envs: List[Environment] =
-      Environment.values.toList.filterNot(_.equals(Environment.Integration))
+    val envs = Environment.values.toList.filterNot(_.equals(Environment.Integration))
     logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")
     for
-      _ <- envs.foldLeftM(())((_, env) => updatePerEnvironment(env))
+      knownServices <- metricsService.knownServices()
+      from          =  Instant.now().minus(schedulerConfig.interval.toMillis, ChronoUnit.MILLIS)
+      to            =  Instant.now()
+      _             <- envs.foldLeftM(()): (_, env) =>
+                         updatePerEnvironment(env, from, to, knownServices)
     yield logger.info(s"Finished updating mongo metrics for ${envs.mkString(", ")}")
 
-  private def updatePerEnvironment(env: Environment)(using HeaderCarrier) =
+  private def updatePerEnvironment(env: Environment, from: Instant, to: Instant, knownServices: Seq[Service])(using HeaderCarrier) =
     for
-      dbMappings <- mongoMetricsService.dbMappings(env)
-      _          <- mongoMetricsService
+      dbMappings <- metricsService.dbMappings(env, knownServices)
+      _          <- metricsService
                       .updateCollectionSizes(env, dbMappings)
                       .recover:
                         case NonFatal(e) => logger.error(s"Failed to update mongo collection sizes for ${env.asString}", e)
-      _          <- mongoMetricsService
-                      .insertQueryLogs(env, dbMappings)
+      _          <- metricsService
+                      .insertLogHistory(env, from, to, knownServices, dbMappings)
                       .recover:
-                        case NonFatal(e) => logger.error(s"Failed to insert mongo query logs for ${env.asString}", e)
+                        case NonFatal(e) => logger.error(s"Failed to insert log history for ${env.asString}", e)
     yield ()

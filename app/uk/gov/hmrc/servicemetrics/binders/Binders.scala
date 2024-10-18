@@ -16,18 +16,36 @@
 
 package uk.gov.hmrc.servicemetrics.binders
 
-import play.api.mvc.QueryStringBindable
+import play.api.mvc.{PathBindable, QueryStringBindable}
 
 import java.time.Instant
 import scala.util.Try
 
 object Binders:
 
-  implicit def instantBindable(implicit strBinder: QueryStringBindable[String]): QueryStringBindable[Instant] =
-    new QueryStringBindable[Instant]:
-      override def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, Instant]] =
-        strBinder.bind(key, params)
-          .map(_.flatMap(s => Try(Instant.parse(s)).toEither.left.map(_.getMessage)))
+  given QueryStringBindable[Instant] =
+    queryStringBindableFromString[Instant](
+      s => Some(Try(Instant.parse(s)).toEither.left.map(_.getMessage)),
+      _.toString
+    )
 
-      override def unbind(key: String, value: Instant): String =
-        strBinder.unbind(key, value.toString)
+  def queryStringBindableFromString[T](parse: String => Option[Either[String, T]], asString: T => String)(using strBinder: QueryStringBindable[String]): QueryStringBindable[T] =
+    new QueryStringBindable[T]:
+      override def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, T]] =
+        strBinder.bind(key, params) match
+          case Some(Right(s)) if s.trim.nonEmpty => parse(s.trim)
+          case _                                 => None
+
+      override def unbind(key: String, value: T): String =
+        strBinder.unbind(key, asString(value))
+
+  /** `summon[PathBindable[String]].transform` doesn't allow us to provide failures.
+    * This function provides `andThen` semantics
+    */
+  def pathBindableFromString[T](parse: String => Either[String, T], asString: T => String)(using strBinder: PathBindable[String]): PathBindable[T] =
+    new PathBindable[T]:
+      override def bind(key: String, value: String): Either[String, T] =
+        parse(value)
+
+      override def unbind(key: String, value: T): String =
+        asString(value)

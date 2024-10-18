@@ -18,45 +18,43 @@ package uk.gov.hmrc.servicemetrics.persistence
 
 import org.mongodb.scala.ObservableFuture
 import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
+import play.api.Configuration
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import uk.gov.hmrc.mongo.MongoComponent
 import uk.gov.hmrc.mongo.play.json.Codecs
 import uk.gov.hmrc.mongo.play.json.formats.MongoJavatimeFormats
 import uk.gov.hmrc.mongo.play.json.PlayMongoRepository
-import uk.gov.hmrc.servicemetrics.config.SlackNotificationsConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
-import MongoQueryLogHistoryRepository.MongoQueryType
-import MongoQueryNotificationRepository.MongoQueryNotification
 
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration.Duration
 
 @Singleton
-class MongoQueryNotificationRepository @Inject()(
-  mongoComponent          : MongoComponent,
-  slackNotificationsConfig: SlackNotificationsConfig,
+class NotificationRepository @Inject()(
+  config        : Configuration,
+  mongoComponent: MongoComponent,
 )(using
   ExecutionContext
 ) extends PlayMongoRepository(
   mongoComponent = mongoComponent,
-  collectionName = "mongoQueryNotifications",
-  domainFormat   = MongoQueryNotification.format,
+  collectionName = "notifications",
+  domainFormat   = NotificationRepository.Notification.format,
   indexes        = Seq(
-                     IndexModel(Indexes.ascending("service")),
-                     IndexModel(Indexes.ascending("environment")),
-                     IndexModel(Indexes.ascending("queryType")),
-                     IndexModel(Indexes.ascending("collection")),
-                     IndexModel(Indexes.ascending("team")),
-                     IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(slackNotificationsConfig.throttlingPeriod.toDays, TimeUnit.DAYS)),
+                     IndexModel(Indexes.ascending("team"))
+                   , IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(config.get[Duration]("alerts.slack.throttling-period").toDays, TimeUnit.DAYS))
                    ),
-  extraCodecs    = Seq(Codecs.playFormatCodec(MongoQueryType.format))
+  extraCodecs    = Seq(Codecs.playFormatCodec(LogHistoryRepository.LogType.format))
 ):
 
-  def flagAsNotified(notifications: Seq[MongoQueryNotification]): Future[Unit] =
-    collection.insertMany(notifications).toFuture().map(_ => ())
+  def flagAsNotified(notifications: Seq[NotificationRepository.Notification]): Future[Unit] =
+    collection
+      .insertMany(notifications)
+      .toFuture()
+      .map(_ => ())
 
   def hasBeenNotified(team: String): Future[Boolean] =
     collection
@@ -65,22 +63,20 @@ class MongoQueryNotificationRepository @Inject()(
       .headOption()
       .map(_.isDefined)
 
-object MongoQueryNotificationRepository:
-  case class MongoQueryNotification(
+object NotificationRepository:
+  case class Notification(
     service    : String,
-    database   : String,
     environment: Environment,
-    queryType  : MongoQueryType,
+    logType    : LogHistoryRepository.LogType,
     timestamp  : Instant,
     team       : String
   )
 
-  object MongoQueryNotification:
-    val format: Format[MongoQueryNotification] =
+  object Notification:
+    val format: Format[Notification] =
       ( (__ \ "service"    ).format[String]
-      ~ (__ \ "database"   ).format[String]
-      ~ (__ \ "environment").format[Environment](Environment.format)
-      ~ (__ \ "queryType"  ).format[MongoQueryType](MongoQueryType.format)
+      ~ (__ \ "environment").format[Environment]
+      ~ (__ \ "logType"    ).format[LogHistoryRepository.LogType](LogHistoryRepository.LogType.format)
       ~ (__ \ "timestamp"  ).format[Instant](MongoJavatimeFormats.instantFormat)
       ~ (__ \ "team"       ).format[String]
-      )(MongoQueryNotification.apply, o => Tuple.fromProductTyped(o))
+      )(Notification.apply, o => Tuple.fromProductTyped(o))
