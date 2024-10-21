@@ -20,7 +20,6 @@ import org.apache.pekko.actor.ActorSystem
 import play.api.Logger
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.mongo.lock.LockService
-import uk.gov.hmrc.servicemetrics.config.SchedulerConfig
 
 import scala.concurrent.{ExecutionContext, Future}
 

@@ -2,7 +2,7 @@ import play.sbt.routes.RoutesKeys
 import uk.gov.hmrc.DefaultBuildSettings
 
 ThisBuild / majorVersion := 0
-ThisBuild / scalaVersion := "3.3.3"
+ThisBuild / scalaVersion := "3.3.4"
 
 lazy val microservice = Project("service-metrics", file("."))
   .enablePlugins(play.sbt.PlayScala, SbtDistributablesPlugin)
@@ -12,9 +12,10 @@ lazy val microservice = Project("service-metrics", file("."))
     // https://www.scala-lang.org/2021/01/12/configuring-and-suppressing-warnings.html
     // suppress warnings in generated routes files
     scalacOptions            += "-Wconf:src=routes/.*:s",
+    javaOptions              += "-Xmx2G",
     RoutesKeys.routesImport  ++= Seq(
-      "uk.gov.hmrc.servicemetrics.model.Environment",
-      "uk.gov.hmrc.servicemetrics.binders.Binders._",
+      "uk.gov.hmrc.servicemetrics.binders.Binders.given"
+    , "uk.gov.hmrc.servicemetrics.model.Environment"
     )
   )
   .settings(resolvers += Resolver.jcenterRepo)

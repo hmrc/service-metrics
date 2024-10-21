@@ -59,15 +59,15 @@ class MongoCollectionSizeHistoryRepository @Inject()(
     environment: Option[Environment] = None,
     date       : Option[LocalDate]   = None
   ): Future[Seq[MongoCollectionSize]] =
-    val filters = Seq(
-      service.map(s => Filters.equal("service", s)),
-      environment.map(env => Filters.equal("environment", env.asString)),
-      date.map(d => Filters.equal("date", d))
-    ).flatten
-
-    collection.find(
-      filter = if (filters.isEmpty) Filters.empty else Filters.and(filters: _*)
-    ).toFuture()
+    collection
+      .find(
+        Seq(
+          service.map(s => Filters.equal("service", s))
+        , environment.map(env => Filters.equal("environment", env.asString))
+        , date.map(d => Filters.equal("date", d))
+        ).flatten
+         .foldLeft(Filters.empty())(Filters.and(_, _))
+      ).toFuture()
 
   def historyExists(environment: Environment, afterDate: LocalDate): Future[Boolean] =
     collection
