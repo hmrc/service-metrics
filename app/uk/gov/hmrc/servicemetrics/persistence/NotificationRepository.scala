@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.Duration
+import uk.gov.hmrc.servicemetrics.config.AppConfig
 
 @Singleton
 class NotificationRepository @Inject()(
@@ -45,6 +46,7 @@ class NotificationRepository @Inject()(
   domainFormat   = NotificationRepository.Notification.format,
   indexes        = Seq(
                      IndexModel(Indexes.ascending("team"))
+                   , IndexModel(Indexes.ascending("logType.logMetricId"))
                    , IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(config.get[Duration]("alerts.slack.throttling-period").toDays, TimeUnit.DAYS))
                    ),
   extraCodecs    = Seq(Codecs.playFormatCodec(LogHistoryRepository.LogType.format))
@@ -56,9 +58,14 @@ class NotificationRepository @Inject()(
       .toFuture()
       .map(_ => ())
 
-  def hasBeenNotified(team: String): Future[Boolean] =
+  def hasBeenNotified(team: String, logMetricId: AppConfig.LogMetricId): Future[Boolean] =
     collection
-      .find(Filters.eq("team", team))
+      .find(
+        Filters.and(
+          Filters.eq("team", team)
+        , Filters.eq("logType.logMetricId", logMetricId.asString)
+        )
+      )
       .limit(1)
       .headOption()
       .map(_.isDefined)

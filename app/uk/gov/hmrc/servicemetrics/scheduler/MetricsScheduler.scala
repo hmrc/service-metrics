@@ -55,7 +55,7 @@ class MetricsScheduler @Inject()(
   , schedulerConfig = schedulerConfig
   , lock            = LockService(lockRepository, "metrics-scheduler", schedulerConfig.interval)
   ):
-    val envs = Environment.values.toList.filterNot(_.equals(Environment.Integration))
+    val envs = Environment.applicableValues
     logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")
     for
       knownServices <- metricsService.knownServices()

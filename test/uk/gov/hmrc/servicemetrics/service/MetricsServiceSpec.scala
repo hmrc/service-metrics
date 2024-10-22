@@ -192,7 +192,7 @@ class MetricsServiceSpec
 
         appConfig
           .logMetrics
-          .map(_.logType)
+          .map(_._2.logType)
           .foreach:
             case LogConfigType.GenericSearch(query)        => verify(mockElasticsearchConnector, times(1)).search              (same(Environment.QA), same(query),                      any[Instant], any[Instant])(using same(hc))
             case LogConfigType.AverageMongoDuration(query) => verify(mockElasticsearchConnector, times(1)).averageMongoDuration(same(Environment.QA), same(query), same("service-one"), any[Instant], any[Instant])(using same(hc))

@@ -49,10 +49,9 @@ class ElasticsearchConnector @Inject()(
   private val mongoDbIndex: String =
     servicesConfig.getString("microservice.services.elasticsearch.mongodb-index")
 
-  private val environmentBasicAuthenticationCredentials: Map[Environment, String] =
+  private val authForEnv: Map[Environment, String] =
     Environment
-      .values
-      .filterNot(_ == Environment.Integration)
+      .applicableValues
       .map: env =>
         env -> servicesConfig.getString(s"microservice.services.elasticsearch.${env.asString}.password")
       .map: (env, password) =>
@@ -67,7 +66,7 @@ class ElasticsearchConnector @Inject()(
     httpClientV2
       .post(url)
       .setHeader:
-        "Authorization" -> environmentBasicAuthenticationCredentials(environment)
+        "Authorization" -> authForEnv(environment)
       .withBody(Json.parse(s"""
         { "size": 0,
           "query": {
@@ -99,7 +98,7 @@ class ElasticsearchConnector @Inject()(
     httpClientV2
       .post(url)
       .setHeader:
-        "Authorization" -> environmentBasicAuthenticationCredentials(environment)
+        "Authorization" -> authForEnv(environment)
       .withBody(Json.parse(s"""
         { "size": 0,
           "query": {

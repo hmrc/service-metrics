@@ -55,7 +55,6 @@ class ElasticsearchConnectorSpec
     , "microservice.services.elasticsearch.staging.password"                           -> "Y2hhbmdlbWU="
     , "microservice.services.elasticsearch.externaltest.password"                      -> "Y2hhbmdlbWU="
     , "microservice.services.elasticsearch.production.password"                        -> "Y2hhbmdlbWU="
-    , "microservice.services.elasticsearch.long-running-query-in-milliseconds"         -> 3000
     , "microservice.services.elasticsearch.non-performant-queries-interval-in-minutes" -> 1440
     )
 

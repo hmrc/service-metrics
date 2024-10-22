@@ -61,4 +61,4 @@ class NotificationRepositorySpec
           )
 
         repository.flagAsNotified(Seq(item)).futureValue
-        repository.hasBeenNotified(team).futureValue shouldBe true
+        repository.hasBeenNotified(team, AppConfig.LogMetricId.SlowRunningQuery).futureValue shouldBe true

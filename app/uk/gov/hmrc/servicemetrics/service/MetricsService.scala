@@ -100,7 +100,7 @@ class MetricsService @Inject()(
                             )
                       .map(acc ++ _)
       _         <- latestMongoCollectionSizeRepository.putAll(collSizes, environment)
-      afterDate =  LocalDate.now().minusDays(appConfig.collectionSizesHistoryFrequencyDays)
+      afterDate =  LocalDate.now().minusDays(appConfig.collectionSizesHistoryFrequency.toDays)
       iPresent  <- mongoCollectionSizeHistoryRepository.historyExists(environment, afterDate)
       _         <- if   iPresent
                    then Future.unit
@@ -108,52 +108,53 @@ class MetricsService @Inject()(
     yield logger.info(s"Successfully updated mongo collection sizes for ${environment.asString}")
 
   def insertLogHistory(environment: Environment, from: Instant, to: Instant, knownServices: Seq[Service], dbMappings: Seq[MetricsService.DbMapping])(using HeaderCarrier): Future[Unit] =
-    appConfig.logMetrics.foldLeftM(()): (_, logMetric) =>
-      for
-        logs <- logMetric.logType match
-                  case AppConfig.LogConfigType.GenericSearch(query) =>
-                    elasticsearchConnector
-                      .search(environment, query, from, to)
-                      .map: logs =>
-                        logs.map: res =>
-                          LogHistoryRepository.LogHistory(
-                            timestamp   = from
-                          , since       = to
-                          , service     = res.key
-                          , logType     = LogHistoryRepository.LogType.GenericSearch(logMetric.id, res.count)
-                          , environment = environment
-                          , teams       = knownServices.collect { case repo if repo.name == ServiceName(res.key) => repo.teamNames }.flatten.distinct
-                          )
-                  case AppConfig.LogConfigType.AverageMongoDuration(query) =>
-                    dbMappings.foldLeftM(Seq.empty[LogHistoryRepository.LogHistory]): (_, mapping) =>
+    appConfig.logMetrics.toSeq.foldLeftM(()):
+      case (_, (logMetricId, logMetric)) =>
+        for
+          logs <- logMetric.logType match
+                    case AppConfig.LogConfigType.GenericSearch(query) =>
                       elasticsearchConnector
-                        .averageMongoDuration(environment, query = query, database = mapping.database, from, to)
-                        .map:
-                          case logs if logs.isEmpty =>
-                            Seq.empty[LogHistoryRepository.LogHistory]
-                          case logs                 =>
-                            Seq(LogHistoryRepository.LogHistory(
+                        .search(environment, query, from, to)
+                        .map: logs =>
+                          logs.map: res =>
+                            LogHistoryRepository.LogHistory(
                               timestamp   = from
                             , since       = to
-                            , service     = mapping.service.value
-                            , logType     = LogHistoryRepository.LogType.AverageMongoDuration(
-                                              logMetricId = logMetric.id
-                                            , details     = logs.map: npq =>
-                                                              LogHistoryRepository.LogType.AverageMongoDuration.MongoDetails(
-                                                                database    = mapping.database
-                                                              , collection  = npq.collection
-                                                              , duration    = npq.avgDuration
-                                                              , occurrences = npq.occurrences
-                                                              )
-                                            )
+                            , service     = res.key
+                            , logType     = LogHistoryRepository.LogType.GenericSearch(logMetricId, res.count)
                             , environment = environment
-                            , teams       = mapping.teams
-                            ))
-        _    <-
-                if   logs.nonEmpty
-                then logHistoryRepository.insertMany(logs)
-                else Future.unit
-      yield logger.info(s"Successfully added ${logs.size} ${logMetric.id} logs for ${environment.asString}")
+                            , teams       = knownServices.collect { case repo if repo.name == ServiceName(res.key) => repo.teamNames }.flatten.distinct
+                            )
+                    case AppConfig.LogConfigType.AverageMongoDuration(query) =>
+                      dbMappings.foldLeftM(Seq.empty[LogHistoryRepository.LogHistory]): (_, mapping) =>
+                        elasticsearchConnector
+                          .averageMongoDuration(environment, query = query, database = mapping.database, from, to)
+                          .map:
+                            case logs if logs.isEmpty =>
+                              Seq.empty[LogHistoryRepository.LogHistory]
+                            case logs                 =>
+                              Seq(LogHistoryRepository.LogHistory(
+                                timestamp   = from
+                              , since       = to
+                              , service     = mapping.service.value
+                              , logType     = LogHistoryRepository.LogType.AverageMongoDuration(
+                                                logMetricId = logMetricId
+                                              , details     = logs.map: npq =>
+                                                                LogHistoryRepository.LogType.AverageMongoDuration.MongoDetails(
+                                                                  database    = mapping.database
+                                                                , collection  = npq.collection
+                                                                , duration    = npq.avgDuration
+                                                                , occurrences = npq.occurrences
+                                                                )
+                                              )
+                              , environment = environment
+                              , teams       = mapping.teams
+                              ))
+          _    <-
+                  if   logs.nonEmpty
+                  then logHistoryRepository.insertMany(logs)
+                  else Future.unit
+        yield logger.info(s"Successfully added ${logs.size} ${logMetricId} logs for ${environment.asString}")
 
 object MetricsService:
   /** @param filterOut is used to filter metrics later, when querying metrics endpoint for a db

@@ -36,8 +36,7 @@ class ClickHouseConnector @Inject()(
 
   private val environmentUrls: Map[Environment, String] =
     Environment
-      .values
-      .filterNot(_ == Environment.Integration)
+      .applicableValues
       .map:
         env => env -> configuration.get[String](s"clickhouse.${env.asString}.url")
       .toMap

@@ -55,17 +55,16 @@ class MetricsController @Inject()(
       for
         history     <- logHistoryRepository.find(service = Some(service), from = from, to = to)
         collections <- latestMongoCollectionSizeRepository.find(service)
-        results     =  appConfig.logMetrics.map: logMetric =>
+        results     =  appConfig.logMetrics.map: (logMetricId, logMetric) =>
                         MetricsController.LogMetric(
-                          id           = logMetric.id
+                          id           = logMetricId
                         , displayName  = logMetric.displayName
                         , environments = Environment
-                                          .values
-                                          .filterNot(_ == Environment.Integration)
+                                          .applicableValues
                                           .map: env =>
                                             ( env
                                             , logMetric.logType
-                                            , history.filter(h => h.logType.logMetricId == logMetric.id && h.environment == env)
+                                            , history.filter(h => h.logType.logMetricId == logMetricId && h.environment == env)
                                             , collections.find(_.environment == env).map(_.database)
                                             )
                                           .collect:

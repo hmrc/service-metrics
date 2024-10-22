@@ -35,3 +35,7 @@ enum Environment(
   case Staging      extends Environment(asString = "staging"     , displayString = "Staging"      )
   case ExternalTest extends Environment(asString = "externaltest", displayString = "External Test")
   case Production   extends Environment(asString = "production"  , displayString = "Production"   )
+
+object Environment:
+  val applicableValues: Seq[Environment] =
+    Environment.values.toSeq.filterNot(_ == Environment.Integration)

@@ -31,6 +31,7 @@ import java.time.{DayOfWeek, Instant, LocalDateTime}
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.Duration
+import scala.util.control.NonFatal
 
 @Singleton
 class NotificationsScheduler  @Inject()(
@@ -65,9 +66,19 @@ class NotificationsScheduler  @Inject()(
     if duringWorkingHours(LocalDateTime.now()) then
       val to   = Instant.now()
       val from = to.minusSeconds(notificationPeriod.toSeconds)
-      logger.info(s"Starting to notify teams based on log detection")
-      notify(from, to).map: _ =>
-        logger.info(s"Finished notifying teams based on log detection in")
+      logger.info(s"Starting to notify teams")
+      metricsService.teamLogs(from, to).flatMap:
+        _.flatMap: (team, logs) =>
+            logs
+              .groupBy(_.logType.logMetricId)
+              .map((logMetricId, logs) => (team, logMetricId, logs))
+          .toSeq
+          .foldLeftM(()):
+            case (_, (team, logMetricId, logs)) =>
+              notifyAndRecord(team, logMetricId, logs).recover:
+                case NonFatal(e) => logger.error(s"Failed to notify team: $team - ${e.getMessage}", e)
+          .map: _ =>
+            logger.info(s"Finished notifying teams")
     else
       logger.info("Notifications are disabled during non-working hours")
       Future.unit
@@ -75,35 +86,26 @@ class NotificationsScheduler  @Inject()(
   private[scheduler] def duringWorkingHours(now: LocalDateTime): Boolean =
     !Seq(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY).contains(now.getDayOfWeek()) && (9 to 17).contains(now.getHour)
 
-  private[scheduler] def notify(from: Instant, to: Instant) =
-    for
-      teamLogs <- metricsService.teamLogs(from, to).map(_.toSeq)
-      toNotify <- teamLogs.foldLeftM(Seq.empty[(String, Seq[LogHistoryRepository.LogHistory])]):
-                    case (acc, (team, logs)) =>
-                      notificationRepository.hasBeenNotified(team).map: alreadyNotified =>
-                        logger.info(s"Notifications for team '$team' ${if alreadyNotified then "were already triggered" else "needs to be sent"}")
-                        if   alreadyNotified
-                        then acc
-                        else acc :+ (team, logs)
-      _        <- toNotify.foldLeftM(()):
-                    case (acc, (team, logs)) =>
-                      val msg = appConfig.createMessage(team, logs)
-                      ( for
-                          _ <- if   notificationChannels.nonEmpty
-                               then notifyChannel(SlackNotificationsConnector.ChannelLookup.SlackChannels(notificationChannels), msg)
-                               else Future.unit
-                          _ <- if   notifyTeams
-                               then notifyChannel(SlackNotificationsConnector.ChannelLookup.GithubTeam(team), msg)
-                               else Future.successful(Nil)
-                          _ <- notificationRepository.flagAsNotified:
-                                 logs.map: l =>
-                                   NotificationRepository.Notification(l.service, l.environment, l.logType, Instant.now(), team)
-                        yield ()
-                      ).recoverWith:
-                        case scala.util.control.NonFatal(e) =>
-                          logger.error(s"Failed to notify team: $team based on log detection", e)
-                          Future.unit
-    yield ()
+  private[scheduler] def notifyAndRecord(team: String, logMetricId: AppConfig.LogMetricId, logs: Seq[LogHistoryRepository.LogHistory]): Future[Unit] =
+    notificationRepository.hasBeenNotified(team, logMetricId).flatMap:
+      case true  => logger.info(s"Notifications for team: $team and logMetricId: ${logMetricId.asString} were already triggered")
+                    Future.unit
+      case false => for
+                      _  <- Future.successful:
+                              if      logs.exists(_.logType.logMetricId != logMetricId) then sys.error(s"Logs: $logs should only contain logMetricId: ${logMetricId.asString}")
+                              else if logs.isEmpty                                      then sys.error(s"Logs are empty for logMetricId: ${logMetricId.asString}")
+                              else ()
+                      msg = appConfig.createMessage(team, logMetricId, logs)
+                      _  <- if   notificationChannels.nonEmpty
+                            then notifyChannel(SlackNotificationsConnector.ChannelLookup.SlackChannels(notificationChannels), msg)
+                            else Future.unit
+                      _  <- if   notifyTeams
+                            then notifyChannel(SlackNotificationsConnector.ChannelLookup.GithubTeam(team), msg)
+                            else Future.successful(Nil)
+                      _  <- notificationRepository.flagAsNotified:
+                              logs.map: l =>
+                                NotificationRepository.Notification(l.service, l.environment, l.logType, Instant.now(), team)
+                    yield logger.info(s"Notifications for team: $team and logMetricId: ${logMetricId.asString} has been sent")
 
   private def notifyChannel(
     channelLookup: SlackNotificationsConnector.ChannelLookup,
