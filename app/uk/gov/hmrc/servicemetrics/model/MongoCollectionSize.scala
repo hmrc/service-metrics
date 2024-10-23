@@ -32,21 +32,17 @@ case class MongoCollectionSize(
 )
 
 object MongoCollectionSize:
-
-  val mongoFormat: Format[MongoCollectionSize] =
+  private def format(using Format[LocalDate]): Format[MongoCollectionSize] =
     ( (__ \ "database"   ).format[String]
     ~ (__ \ "collection" ).format[String]
     ~ (__ \ "sizeBytes"  ).format[BigDecimal]
-    ~ (__ \ "date"       ).format[LocalDate](MongoJavatimeFormats.localDateFormat)
-    ~ (__ \ "environment").format[Environment](Environment.format)
+    ~ (__ \ "date"       ).format[LocalDate]
+    ~ (__ \ "environment").format[Environment]
     ~ (__ \ "service"    ).format[String]
     )(apply, o => Tuple.fromProductTyped(o))
 
+  val mongoFormat: Format[MongoCollectionSize] =
+    format(using MongoJavatimeFormats.localDateFormat)
+
   val apiWrites: Writes[MongoCollectionSize] =
-    ( (__ \ "database"   ).write[String]
-    ~ (__ \ "collection" ).write[String]
-    ~ (__ \ "sizeBytes"  ).write[BigDecimal]
-    ~ (__ \ "date"       ).write[LocalDate]
-    ~ (__ \ "environment").write[Environment](Environment.format)
-    ~ (__ \ "service"    ).write[String]
-    )(o => Tuple.fromProductTyped(o))
+    format(using summon[Format[LocalDate]])

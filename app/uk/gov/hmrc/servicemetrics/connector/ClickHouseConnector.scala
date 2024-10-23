@@ -16,11 +16,11 @@
 
 package uk.gov.hmrc.servicemetrics.connector
 
+import play.api.Configuration
 import play.api.libs.json.JsValue
 import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.http.client.HttpClientV2
-import uk.gov.hmrc.servicemetrics.config.ClickHouseConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import javax.inject.{Inject, Singleton}
@@ -28,14 +28,21 @@ import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class ClickHouseConnector @Inject()(
-  httpClientV2: HttpClientV2
-, config      : ClickHouseConfig
+  configuration: Configuration
+, httpClientV2 : HttpClientV2
 )(using
   ExecutionContext
 ):
 
+  private val environmentUrls: Map[Environment, String] =
+    Environment
+      .applicableValues
+      .map:
+        env => env -> configuration.get[String](s"clickhouse.${env.asString}.url")
+      .toMap
+
   def getDatabaseNames(environment: Environment)(using HeaderCarrier): Future[Seq[String]] =
     httpClientV2
-      .get(url"${config.urls(environment)}/latest/mongodbs")
+      .get(url"${environmentUrls(environment)}/latest/mongodbs")
       .execute[JsValue]
       .map(json => (json \ "name").as[Seq[String]])

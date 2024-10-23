@@ -16,48 +16,26 @@
 
 package uk.gov.hmrc.servicemetrics.model
 
-import play.api.libs.json.{Format, JsError, JsResult, JsString, JsSuccess, JsValue}
+import play.api.libs.json.{Reads, Writes}
 import play.api.mvc.{PathBindable, QueryStringBindable}
+import uk.gov.hmrc.servicemetrics.util.{FromString, FromStringEnum, Parser}
 
-enum Environment(val asString: String):
-  case Development  extends Environment("development" )
-  case Integration  extends Environment("integration" )
-  case QA           extends Environment("qa"          )
-  case Staging      extends Environment("staging"     )
-  case ExternalTest extends Environment("externaltest")
-  case Production   extends Environment("production"  )
+import FromStringEnum._
+
+given Parser[Environment] = Parser.parser(Environment.values)
+
+enum Environment(
+  override val asString: String
+, val displayString    : String
+) extends FromString
+  derives Ordering, Reads, Writes, PathBindable, QueryStringBindable:
+  case Integration  extends Environment(asString = "integration" , displayString = "Integration"  )
+  case Development  extends Environment(asString = "development" , displayString = "Development"  )
+  case QA           extends Environment(asString = "qa"          , displayString = "QA"           )
+  case Staging      extends Environment(asString = "staging"     , displayString = "Staging"      )
+  case ExternalTest extends Environment(asString = "externaltest", displayString = "External Test")
+  case Production   extends Environment(asString = "production"  , displayString = "Production"   )
 
 object Environment:
-  given Ordering[Environment] =
-    Ordering.by(e => values.indexOf(e))
-
-  def parse(s: String): Option[Environment] =
-    values.find(_.asString == s)
-
-  val format: Format[Environment] =
-    new Format[Environment]:
-      override def writes(o: Environment): JsValue =
-        JsString(o.asString)
-
-      override def reads(json: JsValue): JsResult[Environment] =
-        json.validate[String].flatMap(s => Environment.parse(s).map(e => JsSuccess(e)).getOrElse(JsError("invalid environment")))
-
-  implicit val pathBindable: PathBindable[Environment] =
-    new PathBindable[Environment]:
-      override def bind(key: String, value: String): Either[String, Environment] =
-        parse(value).toRight(s"Invalid Environment '$value'")
-
-      override def unbind(key: String, value: Environment): String =
-        value.asString
-
-  implicit val queryStringBindable: QueryStringBindable[Environment] =
-    new QueryStringBindable[Environment]:
-      override def bind(key: String, params: Map[String, Seq[String]]): Option[Either[String, Environment]] =
-        params.get(key).map: values =>
-          values.toList match
-            case Nil         => Left("missing environment value")
-            case head :: Nil => pathBindable.bind(key, head)
-            case _           => Left("too many environment values")
-
-      override def unbind(key: String, value: Environment): String =
-        s"$key=${value.asString}"
+  val applicableValues: Seq[Environment] =
+    Environment.values.toSeq.filterNot(_ == Environment.Integration)

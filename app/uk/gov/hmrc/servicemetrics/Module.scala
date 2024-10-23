@@ -14,18 +14,16 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.servicemetrics.config
+package uk.gov.hmrc.servicemetrics
 
-import play.api.Configuration
-import uk.gov.hmrc.servicemetrics.model.Environment
+import play.api.inject.Binding
+import play.api.{Configuration, Environment}
+import uk.gov.hmrc.servicemetrics.scheduler.{MetricsScheduler, NotificationsScheduler}
 
-import javax.inject.{Inject, Singleton}
+class Module extends play.api.inject.Module:
 
-@Singleton
-class ClickHouseConfig @Inject()(configuration: Configuration):
-
-  val urls: Map[Environment, String] =
-    Environment.values
-      .filterNot(_ == Environment.Integration)
-      .map(env => env -> configuration.get[String](s"clickhouse.${env.asString}.url"))
-      .toMap
+  override def bindings(environment: Environment, configuration: Configuration): Seq[Binding[_]] =
+    Seq(
+      bind[MetricsScheduler      ].toSelf.eagerly()
+    , bind[NotificationsScheduler].toSelf.eagerly()
+    )
