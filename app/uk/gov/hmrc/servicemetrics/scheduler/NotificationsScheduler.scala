@@ -21,7 +21,8 @@ import org.apache.pekko.actor.ActorSystem
 import play.api.{Configuration, Logger}
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
-import uk.gov.hmrc.mongo.lock.{LockService, MongoLockRepository}
+import uk.gov.hmrc.mongo.TimestampSupport
+import uk.gov.hmrc.mongo.lock.{ScheduledLockService, MongoLockRepository}
 import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.persistence.{LogHistoryRepository, NotificationRepository}
@@ -38,6 +39,7 @@ class NotificationsScheduler  @Inject()(
   config                     : Configuration
 , appConfig                  : AppConfig
 , lockRepository             : MongoLockRepository
+, timestampSupport           : TimestampSupport
 , metricsService             : MetricsService
 , slackNotificationsConnector: SlackNotificationsConnector
 , notificationRepository     : NotificationRepository
@@ -61,7 +63,7 @@ class NotificationsScheduler  @Inject()(
   scheduleWithLock(
     label           = "Notifications Scheduler"
   , schedulerConfig = schedulerConfig
-  , lock            = LockService(lockRepository, "notifications-scheduler", schedulerConfig.interval)
+  , lock            = ScheduledLockService(lockRepository, "notifications-scheduler", timestampSupport, schedulerConfig.interval)
   ):
     if duringWorkingHours(LocalDateTime.now()) then
       val to   = Instant.now()

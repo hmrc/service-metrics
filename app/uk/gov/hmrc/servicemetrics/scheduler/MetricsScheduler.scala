@@ -21,7 +21,8 @@ import org.apache.pekko.actor.ActorSystem
 import play.api.{Configuration, Logger}
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
-import uk.gov.hmrc.mongo.lock.{LockService, MongoLockRepository}
+import uk.gov.hmrc.mongo.TimestampSupport
+import uk.gov.hmrc.mongo.lock.{ScheduledLockService, MongoLockRepository}
 import uk.gov.hmrc.servicemetrics.model.Environment
 import uk.gov.hmrc.servicemetrics.service.MetricsService
 
@@ -34,9 +35,10 @@ import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.Servic
 
 @Singleton
 class MetricsScheduler @Inject()(
-  configuration : Configuration
-, lockRepository: MongoLockRepository
-, metricsService: MetricsService
+  configuration   : Configuration
+, lockRepository  : MongoLockRepository
+, timestampSupport: TimestampSupport
+, metricsService  : MetricsService
 )(using
   ActorSystem
 , ApplicationLifecycle
@@ -53,7 +55,7 @@ class MetricsScheduler @Inject()(
   scheduleWithLock(
     label           = "Metrics Scheduler"
   , schedulerConfig = schedulerConfig
-  , lock            = LockService(lockRepository, "metrics-scheduler", schedulerConfig.interval)
+  , lock            = ScheduledLockService(lockRepository, "metrics-scheduler", timestampSupport, schedulerConfig.interval)
   ):
     val envs = Environment.applicableValues
     logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")

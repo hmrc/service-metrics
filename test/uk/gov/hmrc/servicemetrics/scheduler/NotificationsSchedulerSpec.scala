@@ -29,6 +29,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
+import uk.gov.hmrc.mongo.TimestampSupport
 import uk.gov.hmrc.mongo.lock.MongoLockRepository
 import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
@@ -174,7 +175,6 @@ class NotificationsSchedulerSpec
       |}
       |""".stripMargin))
 
-    val mockMongoLockRepository          = mock[MongoLockRepository]
     val mockMetricsService               = mock[MetricsService]
     val mockSlackNotificationsConnector  = mock[SlackNotificationsConnector]
     val mockNotificationRepository       = mock[NotificationRepository]
@@ -182,7 +182,8 @@ class NotificationsSchedulerSpec
     val scheduler = NotificationsScheduler(
       config                      = config
     , appConfig                   = AppConfig(config)
-    , lockRepository              = mockMongoLockRepository
+    , lockRepository              = mock[MongoLockRepository]
+    , timestampSupport            = mock[TimestampSupport]
     , metricsService              = mockMetricsService
     , slackNotificationsConnector = mockSlackNotificationsConnector
     , notificationRepository      = mockNotificationRepository
