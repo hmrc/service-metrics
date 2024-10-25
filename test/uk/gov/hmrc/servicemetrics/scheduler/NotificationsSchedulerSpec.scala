@@ -159,7 +159,6 @@ class NotificationsSchedulerSpec
       |
       |alerts {
       |  slack {
-      |    notification-period   = 1.days
       |    throttling-period     = 2.hours
       |    notify-teams          = $notifyTeams
       |    notification-channels = [${notificationChannels.mkString(",")}]

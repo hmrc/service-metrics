@@ -29,9 +29,9 @@ import uk.gov.hmrc.servicemetrics.persistence.{LogHistoryRepository, Notificatio
 import uk.gov.hmrc.servicemetrics.service.MetricsService
 
 import java.time.{DayOfWeek, Instant, LocalDateTime}
+import java.time.temporal.ChronoUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
 
 @Singleton
@@ -57,7 +57,6 @@ class NotificationsScheduler  @Inject()(
     SchedulerConfig(config, "scheduler.notifications")
 
   private val notifyTeams         : Boolean     = config.get[Boolean]("alerts.slack.notify-teams")
-  private val notificationPeriod  : Duration    = config.get[Duration]("alerts.slack.notification-period")
   private val notificationChannels: Seq[String] = config.get[Seq[String]]("alerts.slack.notification-channels")
 
   scheduleWithLock(
@@ -66,21 +65,23 @@ class NotificationsScheduler  @Inject()(
   , lock            = ScheduledLockService(lockRepository, "notifications-scheduler", timestampSupport, schedulerConfig.interval)
   ):
     if duringWorkingHours(LocalDateTime.now()) then
-      val to   = Instant.now()
-      val from = to.minusSeconds(notificationPeriod.toSeconds)
       logger.info(s"Starting to notify teams")
-      metricsService.teamLogs(from, to).flatMap:
-        _.flatMap: (team, logs) =>
-            logs
-              .groupBy(_.logType.logMetricId)
-              .map((logMetricId, logs) => (team, logMetricId, logs))
-          .toSeq
-          .foldLeftM(()):
-            case (_, (team, logMetricId, logs)) =>
-              notifyAndRecord(team, logMetricId, logs).recover:
-                case NonFatal(e) => logger.error(s"Failed to notify team: $team - ${e.getMessage}", e)
-          .map: _ =>
-            logger.info(s"Finished notifying teams")
+      val to = Instant.now()
+      for
+        from <- notificationRepository
+                  .lastInsertDate()
+                  .map(_.getOrElse(to.minus(3, ChronoUnit.DAYS)))
+        xs   <- metricsService.teamLogs(from, to)
+        _    <- xs.flatMap: (team, logs) =>
+                    logs
+                      .groupBy(_.logType.logMetricId)
+                      .map((logMetricId, logs) => (team, logMetricId, logs))
+                  .toSeq
+                  .foldLeftM(()):
+                    case (_, (team, logMetricId, logs)) =>
+                      notifyAndRecord(team, logMetricId, logs).recover:
+                        case NonFatal(e) => logger.error(s"Failed to notify team: $team - ${e.getMessage}", e)
+      yield logger.info(s"Finished notifying teams")
     else
       logger.info("Notifications are disabled during non-working hours")
       Future.unit

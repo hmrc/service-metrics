@@ -25,6 +25,7 @@ import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class NotificationRepositorySpec
@@ -39,11 +40,11 @@ class NotificationRepositorySpec
   "hasBeenNotified" should:
     "return true" when:
       "there are notifications for a service, collection, environment and query type" in:
-        val team = "team"
-        val environment  = Environment.QA
+        val team = "A-Team"
+        val now  = Instant.now().truncatedTo(ChronoUnit.MILLIS)
         val item =
           NotificationRepository.Notification(
-            timestamp   = Instant.now()
+            timestamp   = now
           , service     = "service"
           , logType     = LogHistoryRepository.LogType.AverageMongoDuration(
                             AppConfig.LogMetricId.SlowRunningQuery
@@ -56,9 +57,14 @@ class NotificationRepositorySpec
                               )
                             )
                           )
-          , environment = environment
+          , environment = Environment.QA
           , team        = team
           )
 
+        repository.hasBeenNotified(team, AppConfig.LogMetricId.SlowRunningQuery).futureValue shouldBe false
+        repository.lastInsertDate().futureValue                                              shouldBe None
+
         repository.flagAsNotified(Seq(item)).futureValue
+
         repository.hasBeenNotified(team, AppConfig.LogMetricId.SlowRunningQuery).futureValue shouldBe true
+        repository.lastInsertDate().futureValue                                              shouldBe Some(now)
