@@ -17,7 +17,7 @@
 package uk.gov.hmrc.servicemetrics.persistence
 
 import org.mongodb.scala.ObservableFuture
-import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
+import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes, Sorts}
 import play.api.Configuration
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
@@ -69,6 +69,14 @@ class NotificationRepository @Inject()(
       .limit(1)
       .headOption()
       .map(_.isDefined)
+
+  def lastInsertDate(): Future[Option[Instant]] =
+    collection
+      .find()
+      .sort(Sorts.descending("timestamp"))
+      .limit(1)
+      .map(_.timestamp)
+      .headOption()
 
 object NotificationRepository:
   case class Notification(
