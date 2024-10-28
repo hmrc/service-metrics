@@ -117,7 +117,7 @@ class NotificationsScheduler  @Inject()(
     slackNotificationsConnector.sendMessage(SlackNotificationsConnector.Request(
       channelLookup = channelLookup
     , text          = "PlatOps notification of Kibana logs"
-    , emoji         = ":see_no_evil:"
-    , displayName   = "Platops Kibana Monitoring"
+    , emoji         = ":tudor-crown:"
+    , displayName   = "MDTP Catalogue"
     , blocks        = SlackNotificationsConnector.toBlocks(messages)
     ))
