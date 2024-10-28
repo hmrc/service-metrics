@@ -91,8 +91,8 @@ class ElasticsearchConnector @Inject()(
         logger.error(s"Error searching query '$query' from $url: ${e.getMessage}", e)
         Nil
 
-  def averageMongoDuration(environment: Environment, query: String, database: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[AverageMongoDuration]] =
-    given Reads[Seq[AverageMongoDuration]] = AverageMongoDuration.reads
+  def averageMongoDuration(environment: Environment, query: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Map[String, Seq[AverageMongoDuration]]] =
+    given Reads[Map[String, Seq[AverageMongoDuration]]] = AverageMongoDuration.reads
     val url = url"${baseUrl.replace("$env", environment.asString)}/$mongoDbIndex/_search/"
 
     httpClientV2
@@ -104,7 +104,7 @@ class ElasticsearchConnector @Inject()(
           "query": {
             "bool": {
               "must": [
-                { "query_string": { "query": "type:mongodb AND NOT mongo_db:(\\\"backup_mongo\\\"|\\\"backup_protected-mongo\\\"|\\\"backup_protected-auth-mongo\\\"|\\\"backup_protected-centralised-auth-mongo\\\"|\\\"backup_protected-rate-mongo\\\"|\\\"backup_public-mongo\\\") AND $query AND  database.raw:\\\"$database\\\"" } }
+                { "query_string": { "query": "type:mongodb AND NOT mongo_db:(\\\"backup_mongo\\\"|\\\"backup_protected-mongo\\\"|\\\"backup_protected-auth-mongo\\\"|\\\"backup_protected-centralised-auth-mongo\\\"|\\\"backup_protected-rate-mongo\\\"|\\\"backup_public-mongo\\\") AND $query" } }
               ],
               "filter": [
                 { "range": { "@timestamp": { "format": "strict_date_optional_time", "gte": "$from", "lte": "$to" } } }
@@ -112,10 +112,15 @@ class ElasticsearchConnector @Inject()(
             }
           },
           "aggs": {
-            "mongo": {
-              "terms": { "field": "collection.raw" },
+            "database": {
+              "terms": { "field": "database.raw" },
               "aggs": {
-                "avg_duration" : { "avg" : { "field" : "duration" } }
+                "collection": {
+                  "terms": { "field": "collection.raw" },
+                  "aggs": {
+                    "avg_duration" : { "avg" : { "field" : "duration" } }
+                  }
+                }
               }
             }
           },
@@ -124,10 +129,10 @@ class ElasticsearchConnector @Inject()(
           ]
         }""")
       )
-      .execute[Seq[AverageMongoDuration]]
+      .execute[Map[String, Seq[AverageMongoDuration]]]
       .recover: e =>
         logger.error(s"Error getting average mongo duration for query '$query' from $url: ${e.getMessage}", e)
-        Seq.empty
+        Map.empty
 
 object ElasticsearchConnector:
 
@@ -138,13 +143,21 @@ object ElasticsearchConnector:
   )
 
   object AverageMongoDuration:
-    val reads: Reads[Seq[AverageMongoDuration]] =
+    val reads: Reads[Map[String, Seq[AverageMongoDuration]]] =
       given Reads[AverageMongoDuration] =
         ( (__ \ "key"                   ).read[String]
         ~ (__ \ "doc_count"             ).read[Int]
         ~ (__ \ "avg_duration" \ "value").read[Double].map(_.toInt)
         )(apply)
-      (__ \ "aggregations" \ "mongo" \ "buckets").read[Seq[AverageMongoDuration]]
+
+      given Reads[Tuple2[String, Seq[AverageMongoDuration]]] =
+        ( (__ \ "key"                   ).read[String]
+        ~ (__ \ "collection" \ "buckets").read[Seq[AverageMongoDuration]]
+        )(Tuple2[String, Seq[AverageMongoDuration]].apply)
+
+      (__ \ "aggregations" \ "database" \ "buckets")
+        .read[Seq[Tuple2[String, Seq[AverageMongoDuration]]]]
+        .map(_.toMap)
 
   case class SearchResult(key: String, count: Int)
 

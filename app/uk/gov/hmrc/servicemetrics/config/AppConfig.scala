@@ -46,7 +46,7 @@ class AppConfig @Inject()(config: Configuration):
     logMetric.logType match
       case _: LogConfigType.AverageMongoDuration =>
         Seq(
-          s"Hi *$team*, PlatOps would like to notify you about the following *${logMetric.displayName}* Kibana logs:"
+          s"Hi *$team*, you have the following *${logMetric.displayName}* Kibana logs:"
         , logs.sortBy(x => (x.service, x.environment))
               .flatMap: n =>
                 n.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(detail => (n, detail))
@@ -58,7 +58,7 @@ class AppConfig @Inject()(config: Configuration):
         )
       case _: LogConfigType.GenericSearch =>
         Seq(
-          s"Hi *$team*, PlatOps would like to notify you about the following *${logMetric.displayName}* Kibana logs:"
+          s"Hi *$team*, you have the following *${logMetric.displayName}* Kibana logs:"
         , logs.sortBy(x => (x.service, x.environment))
               .map: n =>
                 val link = kibanaLink(logMetric, n.service, n.environment)
