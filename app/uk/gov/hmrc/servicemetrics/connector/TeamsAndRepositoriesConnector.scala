@@ -49,7 +49,7 @@ class TeamsAndRepositoriesConnector @Inject() (
       .execute[Seq[Service]]
 
 object TeamsAndRepositoriesConnector:
-  case class ServiceName(value: String) extends AnyVal
+  case class ServiceName(asString: String) extends AnyVal
 
   case class Service(
     name     : ServiceName,

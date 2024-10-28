@@ -118,29 +118,66 @@ class ElasticsearchConnectorSpec
                 .withStatus(200)
                 .withBody("""
                   {
-                    "took": 7,
+                    "took": 493,
                     "timed_out": false,
                     "_shards": {
-                      "total": 5,
-                      "successful": 5,
-                      "skipped": 0,
+                      "total": 737,
+                      "successful": 737,
+                      "skipped": 613,
                       "failed": 0
                     },
                     "hits": {
-                      "total": 1,
-                      "max_score": 3.321853,
+                      "total": {
+                        "value": 10000,
+                        "relation": "gte"
+                      },
+                      "max_score": null,
                       "hits": []
                     },
                     "aggregations": {
-                      "mongo": {
+                      "database": {
                         "doc_count_error_upper_bound": 0,
-                        "sum_other_doc_count": 6,
+                        "sum_other_doc_count": 314,
                         "buckets": [
                           {
-                            "key": "some-collection-name",
-                            "doc_count": 1,
-                            "avg_duration": {
-                              "value": 10121.309582309583
+                            "key": "some-database-1",
+                            "doc_count": 5,
+                            "collection": {
+                              "doc_count_error_upper_bound": 0,
+                              "sum_other_doc_count": 0,
+                              "buckets": [
+                                {
+                                  "key": "some-collection-1",
+                                  "doc_count": 2,
+                                  "avg_duration": {
+                                    "value": 6145.902085472786
+                                  }
+                                },
+                                {
+                                  "key": "some-collection-2",
+                                  "doc_count": 3,
+                                  "avg_duration": {
+                                    "value": 3818.171965317919
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": "some-database-2",
+                            "doc_count": 9,
+                            "collection": {
+                              "doc_count_error_upper_bound": 0,
+                              "sum_other_doc_count": 0,
+                              "buckets": [
+                                {
+                                  "key": "some-collection-3",
+                                  "doc_count": 9,
+                                  "avg_duration": {
+                                    "value": 16800.564043209877
+                                  }
+                                }
+                              ]
                             }
                           }
                         ]
@@ -150,11 +187,11 @@ class ElasticsearchConnectorSpec
                 )
 
         connector
-          .averageMongoDuration(Environment.QA, query = "some.raw:'Foo'", database = "some-db-name", now.minusSeconds(1000), now)
-          .futureValue shouldBe Seq(
-            AverageMongoDuration(
-              collection  = "some-collection-name"
-            , occurrences = 1
-            , avgDuration = 10121
-            )
+          .averageMongoDuration(Environment.QA, query = "some.raw:'Foo'", now.minusSeconds(1000), now)
+          .futureValue shouldBe Map(
+            "some-database-1" -> Seq(
+                                    AverageMongoDuration(collection = "some-collection-1", occurrences = 2, avgDuration = 6145)
+                                  , AverageMongoDuration(collection = "some-collection-2", occurrences = 3, avgDuration = 3818)
+                                  )
+          , "some-database-2" -> Seq(AverageMongoDuration(collection = "some-collection-3", occurrences = 9, avgDuration = 16800))
           )

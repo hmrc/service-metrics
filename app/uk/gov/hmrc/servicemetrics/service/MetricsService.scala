@@ -70,8 +70,8 @@ class MetricsService @Inject()(
                          database  <- databases
                          filterOut =  databases.filter(_.startsWith(database + "-"))
                          services  =  dbOverrides.filter(_.dbs.contains(database)).toList match
-                                        case Nil       => knownServices.filter(_.name.value == database)
-                                        case overrides => overrides.flatMap(o => knownServices.filter(_.name.value == o.service))
+                                        case Nil       => knownServices.filter(_.name.asString == database)
+                                        case overrides => overrides.flatMap(o => knownServices.filter(_.name.asString == o.service))
                          service   <- services
                        yield MetricsService.DbMapping(
                          service   = service.name,
@@ -96,7 +96,7 @@ class MetricsService @Inject()(
                               sizeBytes   = metric.sizeBytes,
                               date        = metric.timestamp.atZone(ZoneOffset.UTC).toLocalDate,
                               environment = environment,
-                              service     = mapping.service.value
+                              service     = mapping.service.asString
                             )
                       .map(acc ++ _)
       _         <- latestMongoCollectionSizeRepository.putAll(collSizes, environment)
@@ -126,30 +126,35 @@ class MetricsService @Inject()(
                             , teams       = knownServices.collect { case repo if repo.name == ServiceName(res.key) => repo.teamNames }.flatten.distinct
                             )
                     case AppConfig.LogConfigType.AverageMongoDuration(query) =>
-                      dbMappings.foldLeftM(Seq.empty[LogHistoryRepository.LogHistory]): (_, mapping) =>
-                        elasticsearchConnector
-                          .averageMongoDuration(environment, query = query, database = mapping.database, from, to)
-                          .map:
-                            case logs if logs.isEmpty =>
-                              Seq.empty[LogHistoryRepository.LogHistory]
-                            case logs                 =>
-                              Seq(LogHistoryRepository.LogHistory(
-                                timestamp   = from
-                              , since       = to
-                              , service     = mapping.service.value
-                              , logType     = LogHistoryRepository.LogType.AverageMongoDuration(
-                                                logMetricId = logMetricId
-                                              , details     = logs.map: npq =>
-                                                                LogHistoryRepository.LogType.AverageMongoDuration.MongoDetails(
-                                                                  database    = mapping.database
-                                                                , collection  = npq.collection
-                                                                , duration    = npq.avgDuration
-                                                                , occurrences = npq.occurrences
-                                                                )
-                                              )
-                              , environment = environment
-                              , teams       = mapping.teams
-                              ))
+                      elasticsearchConnector
+                        .averageMongoDuration(environment, query, from, to)
+                        .map: logs =>
+                          logs
+                            .map: (database, collections) =>
+                              (dbMappings.find(_.database == database), database, collections)
+                            .flatMap:
+                              case (None           , database, collections) =>
+                                logger.warn(s"Could not find service for db $database with collections ${collections.map(_.collection).mkString(", ") }")
+                                Nil
+                              case (Some(dbMapping), database, collections) =>
+                                LogHistoryRepository.LogHistory(
+                                  timestamp   = from
+                                , since       = to
+                                , service     = dbMapping.service.asString
+                                , logType     = LogHistoryRepository.LogType.AverageMongoDuration(
+                                                  logMetricId = logMetricId
+                                                , details     = collections.map: res =>
+                                                                  LogHistoryRepository.LogType.AverageMongoDuration.MongoDetails(
+                                                                    database    = database
+                                                                  , collection  = res.collection
+                                                                  , duration    = res.avgDuration
+                                                                  , occurrences = res.occurrences
+                                                                  )
+                                                )
+                                , environment = environment
+                                , teams       = dbMapping.teams
+                                ) :: Nil
+                            .toSeq
           _    <-
                   if   logs.nonEmpty
                   then logHistoryRepository.insertMany(logs)
