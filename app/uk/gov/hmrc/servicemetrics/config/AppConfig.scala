@@ -35,9 +35,22 @@ class AppConfig @Inject()(config: Configuration):
   import AppConfig.{LogMetric, LogMetricId, LogConfigType}
   val logMetrics: TreeMap[LogMetricId, LogMetric] =
     TreeMap(
-      LogMetricId.SlowRunningQuery -> LogMetric("Slow Running Query", LogConfigType.AverageMongoDuration(s"duration:>${longRunningQueryThreshold.toMillis}"), config.get[String]("alerts.slack.kibana.links.slow-running-query"))
-    , LogMetricId.NonIndexedQuery  -> LogMetric("Non-indexed Query" , LogConfigType.AverageMongoDuration("scan:COLLSCAN")                                   , config.get[String]("alerts.slack.kibana.links.non-indexed-query") )
-    , LogMetricId.UnsafeContent    -> LogMetric("Unsafe Content"    , LogConfigType.GenericSearch("tags.raw:\\\"UnsafeContent\\\"")                         , config.get[String]("alerts.slack.kibana.links.unsafe-content")    )
+      LogMetricId.SlowRunningQuery -> LogMetric(
+                                        displayName   = "Slow Running Query"
+                                      , logType       = LogConfigType.AverageMongoDuration(s"duration:>${longRunningQueryThreshold.toMillis}")
+                                      , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.slow-running-query")
+                                      )
+    , LogMetricId.NonIndexedQuery  -> LogMetric(
+                                        displayName   = "Non-indexed Query"
+                                      , logType       = LogConfigType.AverageMongoDuration("scan:COLLSCAN")
+                                      , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.non-indexed-query")
+                                      )
+    , LogMetricId.UnsafeContent    -> LogMetric(
+                                        displayName   = "Unsafe Content"
+                                      , logType       = LogConfigType.GenericSearch("tags.raw:\\\"UnsafeContent\\\"")
+                                      , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.unsafe-content")
+                                      , onlyNotifyIn  = Seq(Environment.Production)
+                                      )
     )
 
   import uk.gov.hmrc.servicemetrics.persistence.LogHistoryRepository
@@ -104,6 +117,7 @@ object AppConfig:
     displayName  : String
   , logType      : LogConfigType
   , rawKibanaLink: String
+  , onlyNotifyIn : Seq[Environment] = Environment.applicableValues
   )
 
   enum LogConfigType(val query: String):

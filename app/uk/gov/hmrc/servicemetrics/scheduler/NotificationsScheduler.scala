@@ -89,11 +89,13 @@ class NotificationsScheduler  @Inject()(
   private[scheduler] def duringWorkingHours(now: LocalDateTime): Boolean =
     !Seq(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY).contains(now.getDayOfWeek()) && (9 to 17).contains(now.getHour)
 
-  private[scheduler] def notifyAndRecord(team: String, logMetricId: AppConfig.LogMetricId, logs: Seq[LogHistoryRepository.LogHistory]): Future[Unit] =
+  private[scheduler] def notifyAndRecord(team: String, logMetricId: AppConfig.LogMetricId, allLogs: Seq[LogHistoryRepository.LogHistory]): Future[Unit] =
     notificationRepository.hasBeenNotified(team, logMetricId).flatMap:
       case true  => logger.info(s"Notifications for team: $team and logMetricId: ${logMetricId.asString} were already triggered")
                     Future.unit
-      case false => for
+      case false => val envs = appConfig.logMetrics(logMetricId).onlyNotifyIn
+                    val logs = allLogs.filter(x => envs.contains(x.environment))
+                    for
                       _  <- Future.successful:
                               if      logs.exists(_.logType.logMetricId != logMetricId) then sys.error(s"Logs: $logs should only contain logMetricId: ${logMetricId.asString}")
                               else if logs.isEmpty                                      then sys.error(s"Logs are empty for logMetricId: ${logMetricId.asString}")
