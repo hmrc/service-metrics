@@ -45,12 +45,12 @@ class AppConfig @Inject()(config: Configuration):
                                       , logType       = LogConfigType.AverageMongoDuration("scan:COLLSCAN")
                                       , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.non-indexed-query")
                                       )
-    , LogMetricId.UnsafeContent    -> LogMetric(
-                                        displayName   = "Unsafe Content"
-                                      , logType       = LogConfigType.GenericSearch("tags.raw:\\\"UnsafeContent\\\"")
-                                      , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.unsafe-content")
-                                      , onlyNotifyIn  = Seq(Environment.Production)
-                                      )
+    // , LogMetricId.UnsafeContent    -> LogMetric(
+    //                                     displayName   = "Unsafe Content"
+    //                                   , logType       = LogConfigType.GenericSearch("tags.raw:\\\"UnsafeContent\\\"")
+    //                                   , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.unsafe-content")
+    //                                   , onlyNotifyIn  = Seq(Environment.Production)
+    //                                   )
     )
 
   import uk.gov.hmrc.servicemetrics.persistence.LogHistoryRepository
