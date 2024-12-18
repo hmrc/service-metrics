@@ -168,6 +168,7 @@ class NotificationsSchedulerSpec
       |        slow-running-query = "http://url"
       |        non-indexed-query  = "http://url"
       |        unsafe-content     = "http://url"
+      |        orphan-token       = "http://url"
       |      }
       |    }
       |  }

@@ -45,6 +45,11 @@ class AppConfig @Inject()(config: Configuration):
                                       , logType       = LogConfigType.AverageMongoDuration("scan:COLLSCAN")
                                       , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.non-indexed-query")
                                       )
+    , LogMetricId.OrphanToken       -> LogMetric(
+                                         displayName = "Orphaned internal-auth token"
+                                       , logType     = LogConfigType.GenericSearch("app.raw: \\\"internal-auth\\\" AND level.raw: \\\"WARN\\\" AND \\\"An orphaned token exists for principal:\\\"")
+                                       , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.orphan-token")
+                                       )
     // , LogMetricId.UnsafeContent    -> LogMetric(
     //                                     displayName   = "Unsafe Content"
     //                                   , logType       = LogConfigType.GenericSearch("tags.raw:\\\"UnsafeContent\\\"")
@@ -111,6 +116,7 @@ object AppConfig:
     derives Ordering, Reads, Writes, PathBindable, QueryStringBindable:
     case SlowRunningQuery extends LogMetricId("slow-running-query")
     case NonIndexedQuery  extends LogMetricId("non-indexed-query" )
+    case OrphanToken      extends LogMetricId("orphan-token"      )
     case UnsafeContent    extends LogMetricId("unsafe-content"    )
 
   case class LogMetric(
