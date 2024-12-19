@@ -33,6 +33,7 @@ import java.time.temporal.ChronoUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
+import play.api.libs.json.JsValue
 
 @Singleton
 class NotificationsScheduler  @Inject()(
@@ -114,12 +115,12 @@ class NotificationsScheduler  @Inject()(
 
   private def notifyChannel(
     channelLookup: SlackNotificationsConnector.ChannelLookup,
-    messages     : Seq[String],
+    messages     : Seq[JsValue],
   ): Future[Unit] =
     slackNotificationsConnector.sendMessage(SlackNotificationsConnector.Request(
       channelLookup = channelLookup
     , text          = "PlatOps notification of Kibana logs"
     , emoji         = ":tudor-crown:"
     , displayName   = "MDTP Catalogue"
-    , blocks        = SlackNotificationsConnector.toBlocks(messages)
+    , blocks        = SlackNotificationsConnector.withDivider(messages)
     ))

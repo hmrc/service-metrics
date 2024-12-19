@@ -101,13 +101,14 @@ object SlackNotificationsConnector:
       ~ (__ \ "blocks"       ).write[Seq[JsValue]]
       )(o => Tuple.fromProductTyped(o))
 
-  def toBlocks(messages: Seq[String]): Seq[JsValue] =
-    Json.parse("""{"type": "divider"}"""") +:
-      messages.map: message =>
-        Json.parse(s"""{
-          "type": "section",
-          "text": {
-            "type": "mrkdwn",
-            "text": "${message.replace("\n","\\n")}"
-          }
-        }""")
+  def withDivider(messages: Seq[JsValue]): Seq[JsValue] =
+    Json.parse("""{"type": "divider"}"""") +: messages
+
+  def mrkdwnBlock(message: String): JsValue =
+    Json.parse(s"""{
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "$message"
+      }
+    }""")
