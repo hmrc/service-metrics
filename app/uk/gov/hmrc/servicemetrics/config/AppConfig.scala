@@ -22,6 +22,8 @@ import uk.gov.hmrc.servicemetrics.model.Environment
 import javax.inject.{Inject, Singleton}
 import scala.collection.immutable.TreeMap
 import scala.concurrent.duration.Duration
+import play.api.libs.json.JsValue
+import uk.gov.hmrc.servicemetrics.connector.SlackNotificationsConnector
 
 @Singleton
 class AppConfig @Inject()(config: Configuration):
@@ -59,31 +61,25 @@ class AppConfig @Inject()(config: Configuration):
     )
 
   import uk.gov.hmrc.servicemetrics.persistence.LogHistoryRepository
-  def createMessage(team: String, logMetricId: LogMetricId, logs: Seq[LogHistoryRepository.LogHistory]): Seq[String] =
+  def createMessage(team: String, logMetricId: LogMetricId, logs: Seq[LogHistoryRepository.LogHistory]): Seq[JsValue] =
     val logMetric = logMetrics(logMetricId)
     logMetric.logType match
       case _: LogConfigType.AverageMongoDuration =>
-        Seq(
-          s"Hi *$team*, you have the following *${logMetric.displayName}* Kibana logs:"
-        , logs.sortBy(x => (x.service, x.environment))
-              .flatMap: n =>
-                n.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(detail => (n, detail))
-              .map: (n, detail) =>
-                val link = kibanaLink(logMetric, n.service, n.environment, Some(detail.database))
-                s"• service *${n.service}* in *${n.environment.displayString}* for collection *${detail.collection}* - <$link|see kibana>"
-              .distinct
-              .mkString("\n")
-        )
+        SlackNotificationsConnector.mrkdwnBlock(s"Hi *$team*, you have the following *${logMetric.displayName}* Kibana logs:") +:
+        logs.sortBy(x => (x.service, x.environment))
+          .flatMap: n =>
+            n.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(detail => (n, detail))
+          .map: (n, detail) =>
+            val link = kibanaLink(logMetric, n.service, n.environment, Some(detail.database))
+            SlackNotificationsConnector.mrkdwnBlock(s"• service *${n.service}* in *${n.environment.displayString}* for collection *${detail.collection}* - <${link}|see kibana>")
+          .distinct
       case _: LogConfigType.GenericSearch =>
-        Seq(
-          s"Hi *$team*, you have the following *${logMetric.displayName}* Kibana logs:"
-        , logs.sortBy(x => (x.service, x.environment))
-              .map: n =>
-                val link = kibanaLink(logMetric, n.service, n.environment)
-                s"• service *${n.service}* in *${n.environment.displayString}* - <$link|see kibana>"
-              .distinct
-              .mkString("\n")
-        )
+        SlackNotificationsConnector.mrkdwnBlock(s"Hi *$team*, you have the following *${logMetric.displayName}* Kibana logs:") +:
+        logs.sortBy(x => (x.service, x.environment))
+          .map: n =>
+            val link = kibanaLink(logMetric, n.service, n.environment)
+            SlackNotificationsConnector.mrkdwnBlock(s"• service *${n.service}* in *${n.environment.displayString}* - <$link|see kibana>")
+          .distinct
 
   import java.net.URLEncoder
   def kibanaLink(logMetric: LogMetric, serviceName: String, environment: Environment, oDatabase: Option[String] = None): String =

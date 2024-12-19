@@ -55,27 +55,29 @@ class MetricsController @Inject()(
       for
         history     <- logHistoryRepository.find(service = Some(service), from = from, to = to)
         collections <- latestMongoCollectionSizeRepository.find(service)
-        results     =  appConfig.logMetrics.map: (logMetricId, logMetric) =>
-                        MetricsController.LogMetric(
-                          id           = logMetricId
-                        , displayName  = logMetric.displayName
-                        , environments = Environment
-                                          .applicableValues
-                                          .map: env =>
-                                            ( env
-                                            , logMetric.logType
-                                            , history.filter(h => h.logType.logMetricId == logMetricId && h.environment == env)
-                                            , collections.find(_.environment == env).map(_.database)
-                                            )
-                                          .collect:
-                                            case (env, _: AppConfig.LogConfigType.AverageMongoDuration, logs, Some(database)) =>
-                                              val link = appConfig.kibanaLink(logMetric, service, env, Some(database))
-                                              (env.asString, MetricsController.EnvironmentResult(link, logs.size))
-                                            case (env, _: AppConfig.LogConfigType.GenericSearch, logs, _) =>
-                                              val link = appConfig.kibanaLink(logMetric, service, env)
-                                              (env.asString, MetricsController.EnvironmentResult(link, logs.size))
-                                          .toMap
-                        )
+        results     =  appConfig.logMetrics
+                         .filterNot(_._1 == AppConfig.LogMetricId.OrphanToken)
+                         .map: (logMetricId, logMetric) =>
+                           MetricsController.LogMetric(
+                             id           = logMetricId
+                           , displayName  = logMetric.displayName
+                           , environments = Environment
+                                             .applicableValues
+                                             .map: env =>
+                                               ( env
+                                               , logMetric.logType
+                                               , history.filter(h => h.logType.logMetricId == logMetricId && h.environment == env)
+                                               , collections.find(_.environment == env).map(_.database)
+                                               )
+                                             .collect:
+                                               case (env, _: AppConfig.LogConfigType.AverageMongoDuration, logs, Some(database)) =>
+                                                 val link = appConfig.kibanaLink(logMetric, service, env, Some(database))
+                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.size))
+                                               case (env, _: AppConfig.LogConfigType.GenericSearch, logs, _) =>
+                                                 val link = appConfig.kibanaLink(logMetric, service, env)
+                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.size))
+                                             .toMap
+                           )
       yield Ok(Json.toJson(results))
 
 object MetricsController:
