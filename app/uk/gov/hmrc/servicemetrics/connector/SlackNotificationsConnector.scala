@@ -75,11 +75,12 @@ object SlackNotificationsConnector:
     case SlackChannels(slackChannels : Seq[String]) extends ChannelLookup("slack-channel")
 
   case class Request(
-    channelLookup: ChannelLookup,
-    displayName  : String,
-    emoji        : String,
-    text         : String,
-    blocks       : Seq[JsValue]
+    channelLookup  : ChannelLookup,
+    displayName    : String,
+    emoji          : String,
+    text           : String,
+    blocks         : Seq[JsValue],
+    callbackChannel: Option[String] = None
   )
 
   object Request:
@@ -94,11 +95,12 @@ object SlackNotificationsConnector:
           case s: ChannelLookup.SlackChannels => Json.obj("by" -> s.by).deepMerge(Json.toJsObject(s))
         }
 
-      ( (__ \ "channelLookup").write[ChannelLookup]
-      ~ (__ \ "displayName"  ).write[String]
-      ~ (__ \ "emoji"        ).write[String]
-      ~ (__ \ "text"         ).write[String]
-      ~ (__ \ "blocks"       ).write[Seq[JsValue]]
+      ( (__ \ "channelLookup"  ).write[ChannelLookup]
+      ~ (__ \ "displayName"    ).write[String]
+      ~ (__ \ "emoji"          ).write[String]
+      ~ (__ \ "text"           ).write[String]
+      ~ (__ \ "blocks"         ).write[Seq[JsValue]]
+      ~ (__ \ "callbackChannel").writeNullable[String]
       )(o => Tuple.fromProductTyped(o))
 
   def withDivider(messages: Seq[JsValue]): Seq[JsValue] =
