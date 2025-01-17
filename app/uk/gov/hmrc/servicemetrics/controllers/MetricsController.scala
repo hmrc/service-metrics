@@ -55,9 +55,8 @@ class MetricsController @Inject()(
       for
         history     <- logHistoryRepository.find(service = Some(service), from = from, to = to)
         collections <- latestMongoCollectionSizeRepository.find(service)
-        results     =  appConfig.logMetrics
-                         .filterNot(_._1 == AppConfig.LogMetricId.OrphanToken)
-                         .map: (logMetricId, logMetric) =>
+        results     =  appConfig.logMetrics.collect:
+                         case (logMetricId, logMetric) if logMetric.showInCatalogue =>
                            MetricsController.LogMetric(
                              id           = logMetricId
                            , displayName  = logMetric.displayName
@@ -72,10 +71,10 @@ class MetricsController @Inject()(
                                              .collect:
                                                case (env, _: AppConfig.LogConfigType.AverageMongoDuration, logs, Some(database)) =>
                                                  val link = appConfig.kibanaLink(logMetric, service, env, Some(database))
-                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.size))
+                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.flatMap(_.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(_.occurrences)).sum))
                                                case (env, _: AppConfig.LogConfigType.GenericSearch, logs, _) =>
                                                  val link = appConfig.kibanaLink(logMetric, service, env)
-                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.size))
+                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.map(_.logType.asInstanceOf[LogHistoryRepository.LogType.GenericSearch].details).sum))
                                              .toMap
                            )
       yield Ok(Json.toJson(results))

@@ -47,17 +47,19 @@ class AppConfig @Inject()(config: Configuration):
                                       , logType       = LogConfigType.AverageMongoDuration("scan:COLLSCAN")
                                       , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.non-indexed-query")
                                       )
-    , LogMetricId.OrphanToken       -> LogMetric(
-                                         displayName = "Orphaned internal-auth token"
-                                       , logType     = LogConfigType.GenericSearch("app.raw: \\\"internal-auth\\\" AND level.raw: \\\"WARN\\\" AND \\\"An orphaned token exists for principal:\\\"")
-                                       , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.orphan-token")
-                                       )
-    // , LogMetricId.UnsafeContent    -> LogMetric(
-    //                                     displayName   = "Unsafe Content"
-    //                                   , logType       = LogConfigType.GenericSearch("tags.raw:\\\"UnsafeContent\\\"")
-    //                                   , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.unsafe-content")
-    //                                   , onlyNotifyIn  = Seq(Environment.Production)
-    //                                   )
+    , LogMetricId.OrphanToken      -> LogMetric(
+                                        displayName     = "Orphaned internal-auth token"
+                                      , logType         = LogConfigType.GenericSearch("app.raw: \\\"internal-auth\\\" AND level.raw: \\\"WARN\\\" AND \\\"An orphaned token exists for principal:\\\"")
+                                      , rawKibanaLink   = config.get[String]("alerts.slack.kibana.links.orphan-token")
+                                      , showInCatalogue = false // PlatOps Slack notification is all thats required
+                                      )
+    , LogMetricId.ContainerKills   -> LogMetric(
+                                        displayName   = "Container Kills"
+                                      , logType       = LogConfigType.GenericSearch("")
+                                      , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.container-kills")
+                                      , dataView      = "logstash-container_kills*"
+                                      , onlyNotifyIn  = Nil // Teams are already sent a Pager Duty
+                                      )
     )
 
   import uk.gov.hmrc.servicemetrics.persistence.LogHistoryRepository
@@ -113,13 +115,16 @@ object AppConfig:
     case SlowRunningQuery extends LogMetricId("slow-running-query")
     case NonIndexedQuery  extends LogMetricId("non-indexed-query" )
     case OrphanToken      extends LogMetricId("orphan-token"      )
+    case ContainerKills   extends LogMetricId("container-kills"   )
     case UnsafeContent    extends LogMetricId("unsafe-content"    )
 
   case class LogMetric(
-    displayName  : String
-  , logType      : LogConfigType
-  , rawKibanaLink: String
-  , onlyNotifyIn : Seq[Environment] = Environment.applicableValues
+    displayName    : String
+  , logType        : LogConfigType
+  , rawKibanaLink  : String
+  , dataView       : String           = "logstash-*"
+  , onlyNotifyIn   : Seq[Environment] = Environment.applicableValues
+  , showInCatalogue: Boolean          = false
   )
 
   enum LogConfigType(val query: String):

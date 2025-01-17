@@ -114,7 +114,7 @@ class MetricsService @Inject()(
           logs <- logMetric.logType match
                     case AppConfig.LogConfigType.GenericSearch(query) =>
                       elasticsearchConnector
-                        .search(environment, query, from, to)
+                        .search(environment, logMetric.dataView, query, from, to)
                         .map: logs =>
                           logs.map: res =>
                             LogHistoryRepository.LogHistory(
@@ -127,7 +127,7 @@ class MetricsService @Inject()(
                             )
                     case AppConfig.LogConfigType.AverageMongoDuration(query) =>
                       elasticsearchConnector
-                        .averageMongoDuration(environment, query, from, to)
+                        .averageMongoDuration(environment, logMetric.dataView, query, from, to)
                         .map: logs =>
                           logs
                             .map: (database, collections) =>
