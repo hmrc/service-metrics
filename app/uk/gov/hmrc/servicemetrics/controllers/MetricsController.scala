@@ -59,9 +59,8 @@ class MetricsController @Inject()(
       for
         history     <- logHistoryRepository.find(services = Some(Seq(service)), from = from, to = to)
         collections <- latestMongoCollectionSizeRepository.find(Some(Seq(service)))
-        results     =  appConfig.logMetrics
-                         .filterNot(_._1 == AppConfig.LogMetricId.OrphanToken)
-                         .map: (logMetricId, logMetric) =>
+        results     =  appConfig.logMetrics.collect:
+                         case (logMetricId, logMetric) if logMetric.showInCatalogue =>
                            MetricsController.LogMetric(
                              id           = logMetricId
                            , displayName  = logMetric.displayName
@@ -76,10 +75,10 @@ class MetricsController @Inject()(
                                              .collect:
                                                case (env, _: AppConfig.LogConfigType.AverageMongoDuration, logs, Some(database)) =>
                                                  val link = appConfig.kibanaLink(logMetric, service, env, Some(database))
-                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.size))
+                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.flatMap(_.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(_.occurrences)).sum))
                                                case (env, _: AppConfig.LogConfigType.GenericSearch, logs, _) =>
                                                  val link = appConfig.kibanaLink(logMetric, service, env)
-                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.size))
+                                                 (env.asString, MetricsController.EnvironmentResult(link, logs.map(_.logType.asInstanceOf[LogHistoryRepository.LogType.GenericSearch].details).sum))
                                              .toMap
                            )
       yield Ok(Json.toJson(results))
@@ -111,7 +110,7 @@ class MetricsController @Inject()(
         results       =  history
                            .groupBy(log => (log.service, log.logType.logMetricId, log.environment))
                            .collect:
-                             case ((serviceName, logMetricId, environment), logs) if logMetricId != AppConfig.LogMetricId.OrphanToken =>
+                             case ((serviceName, logMetricId, environment), logs) if appConfig.logMetrics(logMetricId).showInCatalogue =>
                                val logMetric = appConfig.logMetrics(logMetricId)
                                val oDatabase = collections.find(mcs => mcs.service == serviceName && mcs.environment == environment).map(_.database)
                                val oService  = services.find(_.name == serviceName)
