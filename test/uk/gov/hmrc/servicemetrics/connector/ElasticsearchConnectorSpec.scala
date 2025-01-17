@@ -47,7 +47,6 @@ class ElasticsearchConnectorSpec
     Configuration(
       "microservice.services.elasticsearch.host"                                       -> wireMockHost
     , "microservice.services.elasticsearch.port"                                       -> wireMockPort
-    , "microservice.services.elasticsearch.mongodb-index"                              -> "mongodb-logs"
     , "microservice.services.elasticsearch.username"                                   -> "changeme"
     , "microservice.services.elasticsearch.development.password"                       -> "Y2hhbmdlbWU="
     , "microservice.services.elasticsearch.integration.password"                       -> "Y2hhbmdlbWU="
@@ -57,16 +56,14 @@ class ElasticsearchConnectorSpec
     , "microservice.services.elasticsearch.production.password"                        -> "Y2hhbmdlbWU="
     , "microservice.services.elasticsearch.non-performant-queries-interval-in-minutes" -> 1440
     )
-
-  private val mongoDbLogsIndex = "mongodb-logs"
-  private val now              = Instant.now()
+  private val now = Instant.now()
 
   private val connector = ElasticsearchConnector(ServicesConfig(config), httpClientV2)
 
   "search" should:
     "return logs" in:
         stubFor:
-          post(urlPathEqualTo(s"/$mongoDbLogsIndex/_search/"))
+          post(urlPathEqualTo(s"/logstash-*/_search/"))
             .willReturn:
               aResponse()
                 .withStatus(200)
@@ -101,7 +98,7 @@ class ElasticsearchConnectorSpec
                 )
 
         connector
-          .search(Environment.QA, "tags.raw:\\\"UnsafeContent\\\"", now.minusSeconds(1000), now)
+          .search(Environment.QA, dataView = "logstash-*", "tags.raw:\\\"UnsafeContent\\\"", now.minusSeconds(1000), now, "app.raw")
           .futureValue shouldBe Seq(
             SearchResult(
               key   = "app.raw"
@@ -112,7 +109,7 @@ class ElasticsearchConnectorSpec
   "averageMongoDuration" should:
     "return mongo logs" in:
         stubFor:
-          post(urlPathEqualTo(s"/$mongoDbLogsIndex/_search/"))
+          post(urlPathEqualTo(s"/logstash-*/_search/"))
             .willReturn:
               aResponse()
                 .withStatus(200)
@@ -187,7 +184,7 @@ class ElasticsearchConnectorSpec
                 )
 
         connector
-          .averageMongoDuration(Environment.QA, query = "some.raw:'Foo'", now.minusSeconds(1000), now)
+          .averageMongoDuration(Environment.QA, dataView = "logstash-*", query = "some.raw:'Foo'", now.minusSeconds(1000), now)
           .futureValue shouldBe Map(
             "some-database-1" -> Seq(
                                     AverageMongoDuration(collection = "some-collection-1", occurrences = 2, avgDuration = 6145)
