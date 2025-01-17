@@ -46,9 +46,6 @@ class ElasticsearchConnector @Inject()(
   private val username: String =
     servicesConfig.getString("microservice.services.elasticsearch.username")
 
-  private val mongoDbIndex: String =
-    servicesConfig.getString("microservice.services.elasticsearch.mongodb-index")
-
   private val authForEnv: Map[Environment, String] =
     Environment
       .applicableValues
@@ -59,9 +56,9 @@ class ElasticsearchConnector @Inject()(
         env -> s"Basic ${String(Base64.getEncoder.encode(s"$username:$decodedPassword".getBytes()))}"
       .toMap
 
-  def search(environment: Environment, query: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[SearchResult]] =
+  def search(environment: Environment, dataView: String, query: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[SearchResult]] =
     given Reads[Seq[SearchResult]] = SearchResult.reads
-    val url  = url"${baseUrl.replace("$env", environment.asString)}/$mongoDbIndex/_search/"
+    val url  = url"${baseUrl.replace("$env", environment.asString)}/$dataView/_search/"
 
     httpClientV2
       .post(url)
@@ -91,9 +88,9 @@ class ElasticsearchConnector @Inject()(
         logger.error(s"Error searching query '$query' from $url: ${e.getMessage}", e)
         Nil
 
-  def averageMongoDuration(environment: Environment, query: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Map[String, Seq[AverageMongoDuration]]] =
+  def averageMongoDuration(environment: Environment, dataView: String, query: String, from: Instant, to: Instant)(using HeaderCarrier): Future[Map[String, Seq[AverageMongoDuration]]] =
     given Reads[Map[String, Seq[AverageMongoDuration]]] = AverageMongoDuration.reads
-    val url = url"${baseUrl.replace("$env", environment.asString)}/$mongoDbIndex/_search/"
+    val url = url"${baseUrl.replace("$env", environment.asString)}/$dataView/_search/"
 
     httpClientV2
       .post(url)

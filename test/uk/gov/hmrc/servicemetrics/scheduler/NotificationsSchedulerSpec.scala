@@ -17,7 +17,6 @@
 package uk.gov.hmrc.servicemetrics.scheduler
 
 import org.apache.pekko.actor.ActorSystem
-import com.typesafe.config.ConfigFactory
 import org.mockito.ArgumentMatchers.{any, same}
 import org.mockito.Mockito.{times, verify, when}
 import org.scalacheck.Gen
@@ -26,7 +25,6 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatestplus.mockito.MockitoSugar
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.mongo.TimestampSupport
@@ -39,7 +37,6 @@ import uk.gov.hmrc.servicemetrics.service.MetricsService
 
 import java.time._
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
 import scala.concurrent.Future
 
 
@@ -93,8 +90,8 @@ class NotificationsSchedulerSpec
           .flagAsNotified(any[Seq[NotificationRepository.Notification]])
 
       "there is no notification channels" in new MongoNotificationsSchedulerFixture(
-        notifyTeams            = true,
-        notificationChannels   = Seq.empty
+        notifyTeams          = true,
+        notificationChannels = Seq.empty
       ):
         scheduler.notifyAndRecord("some-team", AppConfig.LogMetricId.SlowRunningQuery, slowRunningQueryLogs).futureValue
 
@@ -131,57 +128,29 @@ class NotificationsSchedulerSpec
             scheduler.duringWorkingHours(dateTime) shouldBe false
 
   abstract class MongoNotificationsSchedulerFixture(
-    hasBeenNotified       : Boolean     = false,
-    notifyTeams           : Boolean     = true,
-    notificationChannels  : Seq[String] = Seq("channel")
-  ) extends MockitoSugar:
+    hasBeenNotified     : Boolean     = false,
+    notifyTeams         : Boolean     = true,
+    notificationChannels: Seq[String] = Seq("channel")
+  ):
 
-    given ActorSystem          = ActorSystem()
+    val app = new play.api.inject.guice.GuiceApplicationBuilder()
+      .configure(
+        Map(
+          "alerts.slack.notify-teams"          -> notifyTeams
+        , "alerts.slack.notification-channels" -> notificationChannels
+        )
+      ).build()
+
+    given ActorSystem          = app.actorSystem
     given ApplicationLifecycle = mock[ApplicationLifecycle]
-
-    val schedulerConfig =
-      SchedulerConfig(
-        "foo",
-        true,
-        1.second,
-        1.second
-      )
-
-    val config = Configuration(ConfigFactory.parseString(s"""
-      |mongo-collection-size-history.frequency = 1.days
-      |long-running-query-threshold            = 3000.millis
-      |
-      |scheduler.notifications {
-      |  enabled      = true
-      |  interval     = 1.day
-      |  initialDelay = 1.second
-      |}
-      |
-      |alerts {
-      |  slack {
-      |    throttling-period     = 2.hours
-      |    notify-teams          = $notifyTeams
-      |    notification-channels = [${notificationChannels.mkString(",")}]
-      |    kibana {
-      |      baseUrl = "http://logs.$${env}.local"
-      |      links  = {
-      |        slow-running-query = "http://url"
-      |        non-indexed-query  = "http://url"
-      |        unsafe-content     = "http://url"
-      |        orphan-token       = "http://url"
-      |      }
-      |    }
-      |  }
-      |}
-      |""".stripMargin))
 
     val mockMetricsService               = mock[MetricsService]
     val mockSlackNotificationsConnector  = mock[SlackNotificationsConnector]
     val mockNotificationRepository       = mock[NotificationRepository]
 
     val scheduler = NotificationsScheduler(
-      config                      = config
-    , appConfig                   = AppConfig(config)
+      config                      = app.configuration
+    , appConfig                   = AppConfig(app.configuration)
     , lockRepository              = mock[MongoLockRepository]
     , timestampSupport            = mock[TimestampSupport]
     , metricsService              = mockMetricsService
