@@ -20,7 +20,6 @@ import cats.implicits._
 import play.api.Logger
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.config.AppConfig
-import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.ServiceName
 import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.connector.ElasticsearchConnector._
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
@@ -70,8 +69,8 @@ class MetricsService @Inject()(
                          database  <- databases
                          filterOut =  databases.filter(_.startsWith(database + "-"))
                          services  =  dbOverrides.filter(_.dbs.contains(database)).toList match
-                                        case Nil       => knownServices.filter(_.name.asString == database)
-                                        case overrides => overrides.flatMap(o => knownServices.filter(_.name.asString == o.service))
+                                        case Nil       => knownServices.filter(_.name == database)
+                                        case overrides => overrides.flatMap(o => knownServices.filter(_.name == o.service))
                          service   <- services
                        yield MetricsService.DbMapping(
                          service   = service.name,
@@ -96,7 +95,7 @@ class MetricsService @Inject()(
                               sizeBytes   = metric.sizeBytes,
                               date        = metric.timestamp.atZone(ZoneOffset.UTC).toLocalDate,
                               environment = environment,
-                              service     = mapping.service.asString
+                              service     = mapping.service
                             )
                       .map(acc ++ _)
       _         <- latestMongoCollectionSizeRepository.putAll(collSizes, environment)
@@ -123,7 +122,7 @@ class MetricsService @Inject()(
                             , service     = res.key
                             , logType     = LogHistoryRepository.LogType.GenericSearch(logMetricId, res.count)
                             , environment = environment
-                            , teams       = knownServices.collect { case repo if repo.name == ServiceName(res.key) => repo.teamNames }.flatten.distinct
+                            , teams       = knownServices.collect { case repo if repo.name == res.key => repo.teamNames }.flatten.distinct
                             )
                     case AppConfig.LogConfigType.AverageMongoDuration(query) =>
                       elasticsearchConnector
@@ -140,7 +139,7 @@ class MetricsService @Inject()(
                                 LogHistoryRepository.LogHistory(
                                   timestamp   = from
                                 , since       = to
-                                , service     = dbMapping.service.asString
+                                , service     = dbMapping.service
                                 , logType     = LogHistoryRepository.LogType.AverageMongoDuration(
                                                   logMetricId = logMetricId
                                                 , details     = collections.map: res =>
@@ -167,7 +166,7 @@ object MetricsService:
     * "service-one" will bring back dbs/collections belonging to "service-one-frontend"
     */
   case class DbMapping(
-    service  : ServiceName,
+    service  : String,
     database : String,
     filterOut: Seq[String],
     teams    : Seq[String]

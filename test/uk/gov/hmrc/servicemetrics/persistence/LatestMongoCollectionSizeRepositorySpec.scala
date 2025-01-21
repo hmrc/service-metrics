@@ -43,7 +43,7 @@ class LatestMongoCollectionSizeRepositorySpec
       repository.putAll(seed(Environment.Staging   ), Environment.Staging   ).futureValue
       repository.putAll(seed(Environment.Production), Environment.Production).futureValue
 
-      repository.find("service-one", Some(Environment.QA))
+      repository.find(Some(Seq("service-one")), Some(Environment.QA))
         .futureValue
         .headOption
         .map(_.sizeBytes) shouldBe Some(BigDecimal(1000))
@@ -52,12 +52,12 @@ class LatestMongoCollectionSizeRepositorySpec
 
       repository.putAll(updated, Environment.QA).futureValue
 
-      repository.find("service-one", Some(Environment.Staging))
+      repository.find(Some(Seq("service-one")), Some(Environment.Staging))
         .futureValue
         .headOption
         .map(_.sizeBytes) shouldBe Some(BigDecimal(1000))
 
-      repository.find("service-one", Some(Environment.QA))
+      repository.find(Some(Seq("service-one")), Some(Environment.QA))
         .futureValue
         .headOption
         .map(_.sizeBytes) shouldBe Some(BigDecimal(2000))

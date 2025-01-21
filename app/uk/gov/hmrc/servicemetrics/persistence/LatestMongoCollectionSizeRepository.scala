@@ -55,11 +55,14 @@ class LatestMongoCollectionSizeRepository @Inject()(
 
   private given TransactionConfiguration = TransactionConfiguration.strict
 
-  def find(service: String, environment: Option[Environment] = None): Future[Seq[MongoCollectionSize]] =
+  def find(
+    services   : Option[Seq[String]] = None,
+    environment: Option[Environment] = None
+  ): Future[Seq[MongoCollectionSize]] =
     collection
       .find(
         Filters.and(
-          Filters.equal("service", service),
+          services.fold(Filters.empty)(s => Filters.in("service", s: _*)),
           environment.fold(Filters.empty)(env => Filters.equal("environment", env.asString))
         )
       ).toFuture()

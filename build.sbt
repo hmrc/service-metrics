@@ -16,6 +16,7 @@ lazy val microservice = Project("service-metrics", file("."))
     RoutesKeys.routesImport  ++= Seq(
       "uk.gov.hmrc.servicemetrics.binders.Binders.given"
     , "uk.gov.hmrc.servicemetrics.model.Environment"
+    , "uk.gov.hmrc.servicemetrics.config.AppConfig.LogMetricId"
     )
   )
   .settings(resolvers += Resolver.jcenterRepo)

@@ -84,7 +84,7 @@ class LogHistoryRepositorySpec
         repository.insertMany(Seq(item)).futureValue
 
         repository.find(
-          service = Some("service")
-        , from    = now.minusSeconds(10)
-        , to      = now
+          services = Some(Seq("service"))
+        , from     = now.minusSeconds(10)
+        , to       = now
         ).futureValue should be (Seq(item))

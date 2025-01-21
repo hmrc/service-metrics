@@ -26,7 +26,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.{Service, ServiceName}
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.Service
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -106,15 +106,104 @@ class TeamsAndRepositoriesConnectorSpec
 
       val expected = Seq(
         Service(
-          ServiceName("service-one"),
-          Seq("Team One")
+          "service-one",
+          Seq("Team One"),
+          Seq.empty
         ),
         Service(
-          ServiceName("service-two"),
-          Seq("Team Two")
+          "service-two",
+          Seq("Team Two"),
+          Seq.empty
         )
       )
 
       val response = connector.allServices().futureValue
 
+      response should contain theSameElementsAs expected
+
+  "findServices" should:
+    "return all services of an owning team" in:
+      stubFor:
+        get(urlEqualTo(s"/api/v2/repositories?repoType=service&owningTeam=Team+One"))
+        .willReturn:
+          aResponse()
+            .withStatus(200)
+            .withBody("""
+              [
+                {
+                  "name": "service-one",
+                  "teamNames": [
+                    "Team One"
+                  ],
+                  "digitalServices": []
+                },
+                {
+                  "name": "service-two",
+                  "teamNames": [
+                    "Team One"
+                  ],
+                  "digitalServices": []
+                }
+              ]"""
+            )
+
+      val expected = Seq(
+        Service(
+          "service-one",
+          Seq("Team One"),
+          Seq.empty
+        ),
+        Service(
+          "service-two",
+          Seq("Team One"),
+          Seq.empty
+        )
+      )
+
+      val response = connector.findServices(Some("Team One"), None).futureValue
+      response should contain theSameElementsAs expected
+
+    "return all services of a digital service name" in:
+      stubFor:
+        get(urlEqualTo(s"/api/v2/repositories?repoType=service&digitalServiceName=Digital+One"))
+        .willReturn:
+          aResponse()
+            .withStatus(200)
+            .withBody("""
+              [
+                {
+                  "name": "service-one",
+                  "teamNames": [
+                    "Team One"
+                  ],
+                  "digitalServices": [
+                    "Digital One"
+                  ]
+                },
+                {
+                  "name": "service-two",
+                  "teamNames": [
+                    "Team One"
+                  ],
+                  "digitalServices": [
+                    "Digital One"
+                  ]
+                }
+              ]"""
+            )
+
+      val expected = Seq(
+        Service(
+          "service-one",
+          Seq("Team One"),
+          Seq("Digital One")
+        ),
+        Service(
+          "service-two",
+          Seq("Team One"),
+          Seq("Digital One")
+        )
+      )
+
+      val response = connector.findServices(None, Some("Digital One")).futureValue
       response should contain theSameElementsAs expected
