@@ -92,7 +92,7 @@ class AppConfig @Inject()(config: Configuration):
           .rawKibanaLink
           .replace(s"$${env}"     , URLEncoder.encode(environment.asString, "UTF-8"))
           .replace(s"$${database}", URLEncoder.encode(database            , "UTF-8"))
-      case (_: AppConfig.LogConfigType.GenericSearch, None) =>
+      case (_: AppConfig.LogConfigType.GenericSearch, _) =>
         logMetric
           .rawKibanaLink
           .replace(s"$${env}"    , URLEncoder.encode(environment.asString, "UTF-8"))
