@@ -67,14 +67,14 @@ class LogHistoryRepositorySpec
 
   "find" should:
     "return results" when:
-      "there are unsafe-content logs for a service" in:
+      "there are container-kills logs for a service" in:
         val item =
           LogHistoryRepository.LogHistory(
             timestamp   = now
           , since       = now.minusSeconds(20)
           , service     = "service"
           , logType     = LogHistoryRepository.LogType.GenericSearch(
-                            AppConfig.LogMetricId.UnsafeContent
+                            AppConfig.LogMetricId.ContainerKills
                           , details = 5
                           )
           , environment = Environment.QA

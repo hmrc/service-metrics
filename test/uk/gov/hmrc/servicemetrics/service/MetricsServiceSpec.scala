@@ -172,10 +172,10 @@ class MetricsServiceSpec
         when(mockGitHubProxyConnector.getMongoOverrides(any[Environment])(using any[HeaderCarrier]))
           .thenReturn(Future.successful(Seq.empty))
 
-        when(mockElasticsearchConnector.search(any[Environment], any[String], any[Instant], any[Instant])(using any[HeaderCarrier]))
+        when(mockElasticsearchConnector.search(any[Environment], any[String], any[String], any[Instant], any[Instant], any[String])(using any[HeaderCarrier]))
           .thenReturn(Future.successful(Seq(ElasticsearchConnector.SearchResult("some-log", 1))))
 
-        when(mockElasticsearchConnector.averageMongoDuration(any[Environment], any[String], any[Instant], any[Instant])(using any[HeaderCarrier]))
+        when(mockElasticsearchConnector.averageMongoDuration(any[Environment], any[String], any[String], any[Instant], any[Instant])(using any[HeaderCarrier]))
           .thenReturn(Future.successful(Map("service-one" -> Seq(ElasticsearchConnector.AverageMongoDuration("collection-one", 3001, 1)))))
 
         when(mockLogHistoryRepository.insertMany(any[Seq[LogHistoryRepository.LogHistory]]))
@@ -194,8 +194,8 @@ class MetricsServiceSpec
           .logMetrics
           .map(_._2.logType)
           .foreach:
-            case LogConfigType.GenericSearch(query)        => verify(mockElasticsearchConnector, times(1)).search              (same(Environment.QA), same(query), any[Instant], any[Instant])(using same(hc))
-            case LogConfigType.AverageMongoDuration(query) => verify(mockElasticsearchConnector, times(1)).averageMongoDuration(same(Environment.QA), same(query), any[Instant], any[Instant])(using same(hc))
+            case LogConfigType.GenericSearch(query)        => verify(mockElasticsearchConnector, times(1)).search              (same(Environment.QA), any[String], same(query), any[Instant], any[Instant], any[String])(using same(hc))
+            case LogConfigType.AverageMongoDuration(query) => verify(mockElasticsearchConnector, times(1)).averageMongoDuration(same(Environment.QA), any[String], same(query), any[Instant], any[Instant])(using same(hc))
 
         verify(mockLogHistoryRepository, times(appConfig.logMetrics.size))
           .insertMany(any[Seq[LogHistoryRepository.LogHistory]])
