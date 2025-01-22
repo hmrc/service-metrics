@@ -28,7 +28,7 @@ import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
-import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.{Service, ServiceName}
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.Service
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, LogHistoryRepository}
 
@@ -75,10 +75,10 @@ class MetricsServiceSpec
     "map a database to a service taking into account overrides and similarly named dbs" in new Setup:
       val databases = Seq("service-one", "service-one-frontend", "service-two", "random-db")
       val knownServices = Seq(
-        Service(ServiceName("service-one"         ), Seq("team-one")),
-        Service(ServiceName("service-two"         ), Seq("team-two")),
-        Service(ServiceName("service-one-frontend"), Seq("team-one")),
-        Service(ServiceName("service-three"       ), Seq("team-three"))
+        Service("service-one"         , Seq("team-one")  , Seq.empty),
+        Service("service-two"         , Seq("team-two")  , Seq.empty),
+        Service("service-one-frontend", Seq("team-one")  , Seq.empty),
+        Service("service-three"       , Seq("team-three"), Seq.empty)
       )
       val dbOverrides = Seq(DbOverride("service-three", Seq("random-db")))
 
@@ -92,10 +92,10 @@ class MetricsServiceSpec
         .thenReturn(Future.successful(dbOverrides))
 
       val expected = Seq(
-        MetricsService.DbMapping(ServiceName("service-one"         ), "service-one"         , Seq("service-one-frontend"), Seq("team-one")),
-        MetricsService.DbMapping(ServiceName("service-one-frontend"), "service-one-frontend", Seq.empty                  , Seq("team-one")),
-        MetricsService.DbMapping(ServiceName("service-two"         ), "service-two"         , Seq.empty                  , Seq("team-two")),
-        MetricsService.DbMapping(ServiceName("service-three"       ), "random-db"           , Seq.empty                  , Seq("team-three"))
+        MetricsService.DbMapping(("service-one"         ), "service-one"         , Seq("service-one-frontend"), Seq("team-one")),
+        MetricsService.DbMapping(("service-one-frontend"), "service-one-frontend", Seq.empty                  , Seq("team-one")),
+        MetricsService.DbMapping(("service-two"         ), "service-two"         , Seq.empty                  , Seq("team-two")),
+        MetricsService.DbMapping(("service-three"       ), "random-db"           , Seq.empty                  , Seq("team-three"))
       )
 
       service.dbMappings(Environment.QA, knownServices).futureValue should contain theSameElementsAs expected
@@ -103,7 +103,7 @@ class MetricsServiceSpec
   "updateCollectionSizes" should:
     "insert records when none exist" in new Setup:
       val dbMapping = Seq(
-        MetricsService.DbMapping(ServiceName("service"), "database", Seq("service-frontend"), Seq("team-one")),
+        MetricsService.DbMapping("service", "database", Seq("service-frontend"), Seq("team-one")),
       )
 
       when(mockCarbonApiConnector.getCollectionSizes(any[Environment], any[String])(using any[HeaderCarrier]))
@@ -134,7 +134,7 @@ class MetricsServiceSpec
 
     "skip the insert if history already exists" in new Setup:
       val dbMapping = Seq(
-        MetricsService.DbMapping(ServiceName("service"), "database", Seq("service-frontend"), Seq("team-one")),
+        MetricsService.DbMapping(("service"), "database", Seq("service-frontend"), Seq("team-one")),
       )
 
       when(mockCarbonApiConnector.getCollectionSizes(any[Environment], any[String])(using any[HeaderCarrier]))
@@ -164,7 +164,7 @@ class MetricsServiceSpec
     "insert logs" when:
       "there are all log types" in new Setup:
         val databases = Seq("service-one")
-        val knownServices = Seq(Service(ServiceName("service-one"), Seq("team-one")))
+        val knownServices = Seq(Service("service-one", Seq("team-one"), Seq.empty))
 
         when(mockClickHouseConnector.getDatabaseNames(any[Environment])(using any[HeaderCarrier]))
           .thenReturn(Future.successful(databases))

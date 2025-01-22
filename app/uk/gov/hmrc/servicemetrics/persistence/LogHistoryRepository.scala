@@ -18,8 +18,8 @@ package uk.gov.hmrc.servicemetrics.persistence
 
 import org.mongodb.scala.ObservableFuture
 import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
-import play.api.libs.functional.syntax._
-import play.api.libs.json._
+import play.api.libs.functional.syntax.*
+import play.api.libs.json.*
 import uk.gov.hmrc.mongo.MongoComponent
 import uk.gov.hmrc.mongo.play.json.{Codecs, PlayMongoRepository}
 import uk.gov.hmrc.mongo.play.json.formats.MongoJavatimeFormats
@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 import uk.gov.hmrc.servicemetrics.config.AppConfig
+import uk.gov.hmrc.servicemetrics.config.AppConfig.LogMetricId
 
 @Singleton
 class LogHistoryRepository @Inject()(
@@ -44,18 +45,24 @@ class LogHistoryRepository @Inject()(
                      IndexModel(Indexes.ascending("service")),
                      IndexModel(Indexes.ascending("since")),
                      IndexModel(Indexes.ascending("timestamp"), IndexOptions().expireAfter(90, TimeUnit.DAYS)),
+                     IndexModel(Indexes.ascending("environment")),
+                     IndexModel(Indexes.ascending("logType.logMetricId")),
                    ),
   extraCodecs    = Seq(Codecs.playFormatCodec(LogHistoryRepository.LogType.format))
 ):
   def find(
-     service: Option[String] = None
-  ,  from   : Instant
-  ,  to     : Instant
+     services   : Option[Seq[String]] = None
+  ,  environment: Option[Environment] = None
+  ,  metricType : Option[LogMetricId] = None
+  ,  from       : Instant
+  ,  to         : Instant
   ): Future[Seq[LogHistoryRepository.LogHistory]] =
     collection
       .find(
         Filters.and(
-          service.fold(Filters.empty())(s => Filters.equal("service", s)),
+          services.fold(Filters.empty)(s => Filters.in("service", s:_*)),
+          environment.fold(Filters.empty())(e => Filters.equal("environment", e.asString)),
+          metricType.fold(Filters.empty())(l => Filters.eq("logType.logMetricId", l.asString)),
           Filters.or(
             Filters.and(Filters.gte("timestamp", from), Filters.lte("timestamp", to  )),
             Filters.and(Filters.gte("since"    , from), Filters.lte("since"    , to  )),

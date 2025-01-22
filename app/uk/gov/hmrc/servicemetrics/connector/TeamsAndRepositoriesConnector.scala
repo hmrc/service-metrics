@@ -17,8 +17,8 @@
 package uk.gov.hmrc.servicemetrics.connector
 
 import play.api.libs.functional.syntax.toFunctionalBuilderOps
-import play.api.libs.json._
-import uk.gov.hmrc.http.HttpReads.Implicits._
+import play.api.libs.json.*
+import uk.gov.hmrc.http.HttpReads.Implicits.*
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
@@ -48,16 +48,24 @@ class TeamsAndRepositoriesConnector @Inject() (
       .get(url"$teamsAndRepositoriesBaseUrl/api/deleted-repositories?repoType=service")
       .execute[Seq[Service]]
 
-object TeamsAndRepositoriesConnector:
-  case class ServiceName(asString: String) extends AnyVal
+  def findServices(
+    owningTeam    : Option[String]
+  , digitalService: Option[String]
+  )(using hc: HeaderCarrier): Future[Seq[Service]] =
+    httpClientV2
+      .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories?repoType=service&owningTeam=$owningTeam&digitalServiceName=$digitalService")
+      .execute[Seq[Service]]
 
+object TeamsAndRepositoriesConnector:
   case class Service(
-    name     : ServiceName,
-    teamNames: Seq[String]
+    name           : String
+  , teamNames      : Seq[String]
+  , digitalServices: Seq[String]
   )
 
   object Service:
     val reads: Reads[Service] =
-      ( (__ \ "name"     ).read[String].map(ServiceName.apply)
-      ~ (__ \ "teamNames").readWithDefault[Seq[String]](Seq.empty)
+      ( (__ \ "name"           ).read[String]
+      ~ (__ \ "teamNames"      ).readWithDefault[Seq[String]](Seq.empty)
+      ~ (__ \ "digitalServices").readWithDefault[Seq[String]](Seq.empty)
       )(Service.apply)

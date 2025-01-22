@@ -16,10 +16,13 @@
 
 package uk.gov.hmrc.servicemetrics.controllers
 
+import cats.implicits.*
 import play.api.libs.json.{Json, Writes, __}
-import play.api.mvc.{Action, AnyContent, ControllerComponents}
+import play.api.mvc.{Action, AnyContent, ControllerComponents, RequestHeader}
 import uk.gov.hmrc.play.bootstrap.backend.controller.BackendController
 import uk.gov.hmrc.servicemetrics.config.AppConfig
+import uk.gov.hmrc.servicemetrics.config.AppConfig.LogMetricId
+import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
 import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, LogHistoryRepository}
 
@@ -33,6 +36,7 @@ class MetricsController @Inject()(
 , appConfig                          : AppConfig
 , latestMongoCollectionSizeRepository: LatestMongoCollectionSizeRepository
 , logHistoryRepository               : LogHistoryRepository
+, teamsAndRepositoriesConnector      : TeamsAndRepositoriesConnector
 )(using
   ExecutionContext
 ) extends BackendController(cc):
@@ -41,7 +45,7 @@ class MetricsController @Inject()(
     Action.async:
       given Writes[MongoCollectionSize] = MongoCollectionSize.apiWrites
       latestMongoCollectionSizeRepository
-        .find(service, environment)
+        .find(Some(Seq(service)), environment)
         .map(xs => Ok(Json.toJson(xs)))
 
   // Return Kibana links regardless of environment log count, so can always be accessed via catalogue.
@@ -53,8 +57,8 @@ class MetricsController @Inject()(
     Action.async:
       given Writes[MetricsController.LogMetric] = MetricsController.LogMetric.write
       for
-        history     <- logHistoryRepository.find(service = Some(service), from = from, to = to)
-        collections <- latestMongoCollectionSizeRepository.find(service)
+        history     <- logHistoryRepository.find(services = Some(Seq(service)), from = from, to = to)
+        collections <- latestMongoCollectionSizeRepository.find(Some(Seq(service)))
         results     =  appConfig.logMetrics
                          .filterNot(_._1 == AppConfig.LogMetricId.OrphanToken)
                          .map: (logMetricId, logMetric) =>
@@ -80,18 +84,64 @@ class MetricsController @Inject()(
                            )
       yield Ok(Json.toJson(results))
 
+  def getAllLogMetrics(
+    environment   : Option[Environment]
+  , teamName      : Option[String]
+  , digitalService: Option[String]
+  , metricType    : Option[LogMetricId]
+  , from          : Instant
+  , to            : Instant
+  ): Action[AnyContent] =
+    Action.async: request =>
+      given RequestHeader = request
+      given Writes[MetricsController.ServiceMetric] = MetricsController.ServiceMetric.write
+      for
+        services      <- teamsAndRepositoriesConnector.findServices(teamName, digitalService)
+        oServiceNames =  (teamName, digitalService) match
+                           case (None, None) => None
+                           case _            => Some(services.map(_.name))
+        history       <- logHistoryRepository.find(
+                           services    = oServiceNames
+                         , environment = environment
+                         , metricType  = metricType
+                         , from        = from
+                         , to          = to
+                         )
+        collections   <- latestMongoCollectionSizeRepository.find(oServiceNames, environment)
+        results       =  history
+                           .groupBy(log => (log.service, log.logType.logMetricId, log.environment))
+                           .collect:
+                             case ((serviceName, logMetricId, environment), logs) if logMetricId != AppConfig.LogMetricId.OrphanToken =>
+                               val logMetric = appConfig.logMetrics(logMetricId)
+                               val oDatabase = collections.find(mcs => mcs.service == serviceName && mcs.environment == environment).map(_.database)
+                               val oService  = services.find(_.name == serviceName)
+                               MetricsController.ServiceMetric(
+                                 service         = serviceName
+                               , id              = logMetricId
+                               , teams           = oService.fold(Nil)(_.teamNames)
+                               , environment     = environment
+                               , kibanaLink      = appConfig.kibanaLink(logMetric, serviceName, environment, oDatabase)
+                               , logCount        = logMetric.logType match
+                                                     case _: AppConfig.LogConfigType.AverageMongoDuration =>
+                                                       logs.flatMap(_.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(_.occurrences)).sum
+                                                     case _: AppConfig.LogConfigType.GenericSearch        =>
+                                                       logs.map(_.logType.asInstanceOf[LogHistoryRepository.LogType.GenericSearch].details).sum
+                               )
+                           .toSeq
+      yield Ok(Json.toJson(results.sortBy(_.service)))
+
 object MetricsController:
   import play.api.libs.functional.syntax._
+
+  case class EnvironmentResult(
+    kibanaLink: String
+  , count     : Int
+  )
 
   case class LogMetric(
     id          : AppConfig.LogMetricId
   , displayName : String
   , environments: Map[String, EnvironmentResult] // Note Map[Environment, ...] writes as list
-  )
-
-  case class EnvironmentResult(
-    kibanaLink: String
-  , count     : Int
   )
 
   object LogMetric:
@@ -104,4 +154,23 @@ object MetricsController:
       ( (__ \ "id"          ).write[AppConfig.LogMetricId]
       ~ (__ \ "displayName" ).write[String]
       ~ (__ \ "environments").write[Map[String, EnvironmentResult]]
+      )(pt => Tuple.fromProductTyped(pt))
+
+  case class ServiceMetric(
+    service        : String
+  , id             : AppConfig.LogMetricId
+  , environment    : Environment
+  , teams          : Seq[String]
+  , kibanaLink     : String
+  , logCount       : Int
+  )
+
+  object ServiceMetric:
+    val write: Writes[ServiceMetric] =
+      ( (__ \ "service"        ).write[String]
+      ~ (__ \ "id"             ).write[AppConfig.LogMetricId]
+      ~ (__ \ "environment"    ).write[Environment]
+      ~ (__ \ "teams"          ).write[Seq[String]]
+      ~ (__ \ "kibanaLink"     ).write[String]
+      ~ (__ \ "logCount"       ).write[Int]
       )(pt => Tuple.fromProductTyped(pt))
