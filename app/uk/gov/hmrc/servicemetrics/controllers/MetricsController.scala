@@ -84,7 +84,7 @@ class MetricsController @Inject()(
                            )
       yield Ok(Json.toJson(results))
 
-  def getServiceMetrics(
+  def getAllLogMetrics(
     environment   : Option[Environment]
   , teamName      : Option[String]
   , digitalService: Option[String]
