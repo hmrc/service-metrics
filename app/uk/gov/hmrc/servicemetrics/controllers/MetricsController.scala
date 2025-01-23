@@ -28,7 +28,7 @@ import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeReposito
 
 import javax.inject.{Inject, Singleton}
 import java.time.Instant
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton()
 class MetricsController @Inject()(
@@ -95,10 +95,9 @@ class MetricsController @Inject()(
       given RequestHeader = request
       given Writes[MetricsController.ServiceMetric] = MetricsController.ServiceMetric.write
       for
-        services      <- teamsAndRepositoriesConnector.findServices(teamName, digitalService)
-        oServiceNames =  (teamName, digitalService) match
-                           case (None, None) => None
-                           case _            => Some(services.map(_.name))
+        oServiceNames <-  (teamName, digitalService) match
+                           case (None, None) => Future.successful(None)
+                           case _            => teamsAndRepositoriesConnector.findServices(teamName, digitalService).map(services => Some(services.map(_.name)))
         history       <- logHistoryRepository.find(
                            services    = oServiceNames
                          , environment = environment
@@ -113,11 +112,9 @@ class MetricsController @Inject()(
                              case ((serviceName, logMetricId, environment), logs) if appConfig.logMetrics(logMetricId).showInCatalogue =>
                                val logMetric = appConfig.logMetrics(logMetricId)
                                val oDatabase = collections.find(mcs => mcs.service == serviceName && mcs.environment == environment).map(_.database)
-                               val oService  = services.find(_.name == serviceName)
                                MetricsController.ServiceMetric(
                                  service         = serviceName
                                , id              = logMetricId
-                               , teams           = oService.fold(Nil)(_.teamNames)
                                , environment     = environment
                                , kibanaLink      = appConfig.kibanaLink(logMetric, serviceName, environment, oDatabase, Some(from), Some(to))
                                , logCount        = logMetric.logType match
@@ -159,7 +156,6 @@ object MetricsController:
     service        : String
   , id             : AppConfig.LogMetricId
   , environment    : Environment
-  , teams          : Seq[String]
   , kibanaLink     : String
   , logCount       : Int
   )
@@ -169,7 +165,6 @@ object MetricsController:
       ( (__ \ "service"        ).write[String]
       ~ (__ \ "id"             ).write[AppConfig.LogMetricId]
       ~ (__ \ "environment"    ).write[Environment]
-      ~ (__ \ "teams"          ).write[Seq[String]]
       ~ (__ \ "kibanaLink"     ).write[String]
       ~ (__ \ "logCount"       ).write[Int]
       )(pt => Tuple.fromProductTyped(pt))
