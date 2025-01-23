@@ -119,7 +119,7 @@ class MetricsController @Inject()(
                                , id              = logMetricId
                                , teams           = oService.fold(Nil)(_.teamNames)
                                , environment     = environment
-                               , kibanaLink      = appConfig.kibanaLink(logMetric, serviceName, environment, oDatabase)
+                               , kibanaLink      = appConfig.kibanaLink(logMetric, serviceName, environment, oDatabase, Some(from), Some(to))
                                , logCount        = logMetric.logType match
                                                      case _: AppConfig.LogConfigType.AverageMongoDuration =>
                                                        logs.flatMap(_.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(_.occurrences)).sum
