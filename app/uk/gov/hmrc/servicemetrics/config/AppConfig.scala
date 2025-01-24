@@ -25,6 +25,9 @@ import scala.concurrent.duration.Duration
 import play.api.libs.json.JsValue
 import uk.gov.hmrc.servicemetrics.connector.SlackNotificationsConnector
 
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+
 @Singleton
 class AppConfig @Inject()(config: Configuration):
 
@@ -85,20 +88,31 @@ class AppConfig @Inject()(config: Configuration):
           .distinct
 
   import java.net.URLEncoder
-  def kibanaLink(logMetric: LogMetric, serviceName: String, environment: Environment, oDatabase: Option[String] = None): String =
-    (logMetric.logType, oDatabase) match
-      case (_: AppConfig.LogConfigType.AverageMongoDuration, Some(database)) =>
+  def kibanaLink(
+    logMetric  : LogMetric
+  , serviceName: String
+  , environment: Environment
+  , oDatabase  : Option[String]  = None
+  , from       : Option[Instant] = Some(Instant.now().minus(1, ChronoUnit.DAYS))
+  , to         : Option[Instant] = Some(Instant.now()) // default is 1 day
+  ): String =
+    (logMetric.logType, oDatabase, from, to) match
+      case (_: AppConfig.LogConfigType.AverageMongoDuration, Some(database), Some(from), Some(to)) =>
         logMetric
           .rawKibanaLink
           .replace(s"$${env}"     , URLEncoder.encode(environment.asString, "UTF-8"))
           .replace(s"$${database}", URLEncoder.encode(database            , "UTF-8"))
-      case (_: AppConfig.LogConfigType.GenericSearch, _) =>
+          .replace(s"$${from}"    , URLEncoder.encode(from.toString       , "UTF-8"))
+          .replace(s"$${to}"      , URLEncoder.encode(to.toString         , "UTF-8"))
+      case (_: AppConfig.LogConfigType.GenericSearch, _, Some(from), Some(to)) =>
         logMetric
           .rawKibanaLink
           .replace(s"$${env}"    , URLEncoder.encode(environment.asString, "UTF-8"))
           .replace(s"$${service}", URLEncoder.encode(serviceName         , "UTF-8"))
+           .replace(s"$${from}"  , URLEncoder.encode(from.toString       , "UTF-8"))
+           .replace(s"$${to}"    , URLEncoder.encode(to.toString         , "UTF-8"))
       case _ =>
-        sys.error(s"Bad inputs to create kibana link logType: ${logMetric.logType} serviceName: $serviceName environment: ${environment.asString}, oDatabase: $oDatabase")
+        sys.error(s"Bad inputs to create kibana link logType: ${logMetric.logType} serviceName: $serviceName environment: ${environment.asString}, oDatabase: $oDatabase, from: $from, to: $to")
 
 object AppConfig:
   import play.api.libs.json.{Reads, Writes}
