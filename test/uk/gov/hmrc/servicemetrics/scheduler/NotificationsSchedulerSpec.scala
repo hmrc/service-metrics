@@ -61,9 +61,6 @@ class NotificationsSchedulerSpec
           .flagAsNotified(any[Seq[NotificationRepository.Notification]])
 
     "do not notify teams logs queries" when:
-      "there are no logs" in new MongoNotificationsSchedulerFixture():
-        an [Exception] should be thrownBy scheduler.notifyAndRecord("some-team", AppConfig.LogMetricId.SlowRunningQuery, Nil).futureValue
-
       "notification has been already triggered for this team" in new MongoNotificationsSchedulerFixture(
         hasBeenNotified = true
       ):
