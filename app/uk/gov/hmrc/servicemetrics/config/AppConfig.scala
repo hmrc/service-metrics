@@ -72,20 +72,22 @@ class AppConfig @Inject()(config: Configuration):
     logMetric.logType match
       case _: LogConfigType.AverageMongoDuration =>
         SlackNotificationsConnector.mrkdwnBlock(s"Hi *$team*, you have the following *${logMetric.displayName}* Kibana logs:") +:
-        logs.sortBy(x => (x.service, x.environment))
+        logs
           .flatMap: n =>
             n.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(detail => (n, detail))
+          .distinctBy( (n, detail) => (n.service, n.environment, detail.collection))
+          .sortBy( (n, detail) => (n.service, n.environment, detail.collection))
           .map: (n, detail) =>
             val link = kibanaLink(logMetric, n.service, n.environment, Some(detail.database))
             SlackNotificationsConnector.mrkdwnBlock(s"• service *${n.service}* in *${n.environment.displayString}* for collection *${detail.collection}* - <${link}|see kibana>")
-          .distinct
       case _: LogConfigType.GenericSearch =>
         SlackNotificationsConnector.mrkdwnBlock(s"Hi *$team*, you have the following *${logMetric.displayName}* Kibana logs:") +:
-        logs.sortBy(x => (x.service, x.environment))
+        logs
+          .distinctBy(x => (x.service, x.environment))
+          .sortBy(x => (x.service, x.environment))
           .map: n =>
             val link = kibanaLink(logMetric, n.service, n.environment)
             SlackNotificationsConnector.mrkdwnBlock(s"• service *${n.service}* in *${n.environment.displayString}* - <$link|see kibana>")
-          .distinct
 
   import java.net.URLEncoder
   def kibanaLink(
@@ -93,7 +95,7 @@ class AppConfig @Inject()(config: Configuration):
   , serviceName: String
   , environment: Environment
   , oDatabase  : Option[String]  = None
-  , from       : Option[Instant] = Some(Instant.now().minus(1, ChronoUnit.DAYS))
+  , from       : Option[Instant] = Some(Instant.now().minus(7, ChronoUnit.DAYS))
   , to         : Option[Instant] = Some(Instant.now()) // default is 1 day
   ): String =
     (logMetric.logType, oDatabase, from, to) match
