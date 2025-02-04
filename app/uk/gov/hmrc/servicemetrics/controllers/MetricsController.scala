@@ -50,14 +50,14 @@ class MetricsController @Inject()(
 
   // Return Kibana links regardless of environment log count, so can always be accessed via catalogue.
   def getLogMetrics(
-    service    : String
-  , from       : Instant
-  , to         : Instant
+    service: String
+  , from   : Instant
+  , to     : Option[Instant]
   ): Action[AnyContent] =
     Action.async:
       given Writes[MetricsController.LogMetric] = MetricsController.LogMetric.write
       for
-        history     <- logHistoryRepository.find(services = Some(Seq(service)), from = from, to = to)
+        history     <- logHistoryRepository.find(services = Some(Seq(service)), from = from, to = to.getOrElse(Instant.now))
         collections <- latestMongoCollectionSizeRepository.find(Some(Seq(service)))
         results     =  appConfig.logMetrics.collect:
                          case (logMetricId, logMetric) if logMetric.showInCatalogue =>
@@ -74,10 +74,10 @@ class MetricsController @Inject()(
                                                )
                                              .collect:
                                                case (env, _: AppConfig.LogConfigType.AverageMongoDuration, logs, Some(database)) =>
-                                                 val link = appConfig.kibanaLink(logMetric, service, env, Some(database))
+                                                 val link = appConfig.kibanaLink(logMetric, service, env, Some(database), from, to)
                                                  (env.asString, MetricsController.EnvironmentResult(link, logs.flatMap(_.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(_.occurrences)).sum))
                                                case (env, _: AppConfig.LogConfigType.GenericSearch, logs, _) =>
-                                                 val link = appConfig.kibanaLink(logMetric, service, env)
+                                                 val link = appConfig.kibanaLink(logMetric, service, env, None, from, to)
                                                  (env.asString, MetricsController.EnvironmentResult(link, logs.map(_.logType.asInstanceOf[LogHistoryRepository.LogType.GenericSearch].details).sum))
                                              .toMap
                            )
@@ -89,7 +89,7 @@ class MetricsController @Inject()(
   , digitalService: Option[String]
   , metricType    : Option[LogMetricId]
   , from          : Instant
-  , to            : Instant
+  , to            : Option[Instant]
   ): Action[AnyContent] =
     Action.async: request =>
       given RequestHeader = request
@@ -103,7 +103,7 @@ class MetricsController @Inject()(
                          , environment = environment
                          , metricType  = metricType
                          , from        = from
-                         , to          = to
+                         , to          = to.getOrElse(Instant.now)
                          )
         collections   <- latestMongoCollectionSizeRepository.find(oServiceNames, environment)
         results       =  history
@@ -116,7 +116,7 @@ class MetricsController @Inject()(
                                  service         = serviceName
                                , id              = logMetricId
                                , environment     = environment
-                               , kibanaLink      = appConfig.kibanaLink(logMetric, serviceName, environment, oDatabase, Some(from), Some(to))
+                               , kibanaLink      = appConfig.kibanaLink(logMetric, serviceName, environment, oDatabase, from, to)
                                , logCount        = logMetric.logType match
                                                      case _: AppConfig.LogConfigType.AverageMongoDuration =>
                                                        logs.flatMap(_.logType.asInstanceOf[LogHistoryRepository.LogType.AverageMongoDuration].details.map(_.occurrences)).sum
