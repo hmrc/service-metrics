@@ -95,8 +95,8 @@ class AppConfig @Inject()(config: Configuration):
   , serviceName: String
   , environment: Environment
   , oDatabase  : Option[String]  = None
-  , from       : Option[Instant] = Some(Instant.now().minus(7, ChronoUnit.DAYS))
-  , to         : Option[Instant] = Some(Instant.now()) // default is 1 day
+  , from       : Option[Instant] = Some(Instant.now().minus(3, ChronoUnit.DAYS)) // To match max kibana data storage in staging
+  , to         : Option[Instant] = Some(Instant.now())
   ): String =
     (logMetric.logType, oDatabase, from, to) match
       case (_: AppConfig.LogConfigType.AverageMongoDuration, Some(database), Some(from), Some(to)) =>
@@ -111,8 +111,8 @@ class AppConfig @Inject()(config: Configuration):
           .rawKibanaLink
           .replace(s"$${env}"    , URLEncoder.encode(environment.asString, "UTF-8"))
           .replace(s"$${service}", URLEncoder.encode(serviceName         , "UTF-8"))
-           .replace(s"$${from}"  , URLEncoder.encode(from.toString       , "UTF-8"))
-           .replace(s"$${to}"    , URLEncoder.encode(to.toString         , "UTF-8"))
+          .replace(s"$${from}"   , URLEncoder.encode(from.toString       , "UTF-8"))
+          .replace(s"$${to}"     , URLEncoder.encode(to.toString         , "UTF-8"))
       case _ =>
         sys.error(s"Bad inputs to create kibana link logType: ${logMetric.logType} serviceName: $serviceName environment: ${environment.asString}, oDatabase: $oDatabase, from: $from, to: $to")
 
