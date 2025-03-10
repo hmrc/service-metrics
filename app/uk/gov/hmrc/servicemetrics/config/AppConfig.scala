@@ -47,7 +47,7 @@ class AppConfig @Inject()(config: Configuration):
                                       )
     , LogMetricId.NonIndexedQuery  -> LogMetric(
                                         displayName   = "Non-indexed Query"
-                                      , logType       = LogConfigType.AverageMongoDuration("scan:COLLSCAN")
+                                      , logType       = LogConfigType.AverageMongoDuration("scan:COLLSCAN AND NOT operation: \\\"no-index-required\\\"")
                                       , rawKibanaLink = config.get[String]("alerts.slack.kibana.links.non-indexed-query")
                                       )
     , LogMetricId.OrphanToken      -> LogMetric(
