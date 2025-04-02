@@ -40,12 +40,12 @@ class TeamsAndRepositoriesConnector @Inject() (
 
   def allServices()(using HeaderCarrier): Future[Seq[Service]] =
     httpClientV2
-      .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories?repoType=service")
+      .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories?organisation=mdtp&repoType=service")
       .execute[Seq[Service]]
 
   def allDeletedServices()(using HeaderCarrier): Future[Seq[Service]] =
     httpClientV2
-      .get(url"$teamsAndRepositoriesBaseUrl/api/deleted-repositories?repoType=service")
+      .get(url"$teamsAndRepositoriesBaseUrl/api/deleted-repositories?organisation=mdtp&repoType=service")
       .execute[Seq[Service]]
 
   def findServices(
@@ -53,7 +53,7 @@ class TeamsAndRepositoriesConnector @Inject() (
   , digitalService: Option[String]
   )(using hc: HeaderCarrier): Future[Seq[Service]] =
     httpClientV2
-      .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories?repoType=service&owningTeam=$owningTeam&digitalServiceName=$digitalService")
+      .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories?organisation=mdtp&repoType=service&owningTeam=$owningTeam&digitalServiceName=$digitalService")
       .execute[Seq[Service]]
 
 object TeamsAndRepositoriesConnector:

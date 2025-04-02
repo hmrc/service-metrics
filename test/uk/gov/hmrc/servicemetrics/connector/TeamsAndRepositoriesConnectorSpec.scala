@@ -51,7 +51,7 @@ class TeamsAndRepositoriesConnectorSpec
   "allServices" should:
     "return list of service names" in:
       stubFor:
-        get(urlEqualTo("/api/v2/repositories?repoType=service"))
+        get(urlEqualTo("/api/v2/repositories?organisation=mdtp&repoType=service"))
           .willReturn:
             aResponse()
               .withStatus(200)
@@ -124,7 +124,7 @@ class TeamsAndRepositoriesConnectorSpec
   "findServices" should:
     "return all services of an owning team" in:
       stubFor:
-        get(urlEqualTo(s"/api/v2/repositories?repoType=service&owningTeam=Team+One"))
+        get(urlEqualTo(s"/api/v2/repositories?organisation=mdtp&repoType=service&owningTeam=Team+One"))
         .willReturn:
           aResponse()
             .withStatus(200)
@@ -165,7 +165,7 @@ class TeamsAndRepositoriesConnectorSpec
 
     "return all services of a digital service name" in:
       stubFor:
-        get(urlEqualTo(s"/api/v2/repositories?repoType=service&digitalServiceName=Digital+One"))
+        get(urlEqualTo(s"/api/v2/repositories?organisation=mdtp&repoType=service&digitalServiceName=Digital+One"))
         .willReturn:
           aResponse()
             .withStatus(200)
