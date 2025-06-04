@@ -23,7 +23,7 @@ import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.connector.ElasticsearchConnector._
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, LogHistoryRepository}
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, LogHistoryRepository, ServiceProvisionRepository}
 
 import java.time.{Instant, LocalDate, ZoneOffset}
 import javax.inject.{Inject, Singleton}
@@ -41,6 +41,7 @@ class MetricsService @Inject()(
 , latestMongoCollectionSizeRepository : LatestMongoCollectionSizeRepository
 , mongoCollectionSizeHistoryRepository: MongoCollectionSizeHistoryRepository
 , logHistoryRepository                : LogHistoryRepository
+, serviceProvisionRepository          : ServiceProvisionRepository
 )(using
   ExecutionContext
 ):
@@ -87,12 +88,12 @@ class MetricsService @Inject()(
                       .getCollectionSizes(environment, mapping.database)
                       .map: metrics =>
                         metrics
-                          .filterNot(metric => mapping.filterOut.exists(filter => metric.metricLabel.startsWith(s"mongo-$filter")))
+                          .filterNot(metric => mapping.filterOut.exists(filter => metric.label.startsWith(s"mongo-$filter")))
                           .map: metric =>
                             MongoCollectionSize(
                               database    = mapping.database,
-                              collection  = metric.metricLabel.stripPrefix(s"mongo-${mapping.database}-"),
-                              sizeBytes   = metric.sizeBytes,
+                              collection  = metric.label.stripPrefix(s"mongo-${mapping.database}-"),
+                              sizeBytes   = metric.value,
                               date        = metric.timestamp.atZone(ZoneOffset.UTC).toLocalDate,
                               environment = environment,
                               service     = mapping.service
@@ -159,6 +160,23 @@ class MetricsService @Inject()(
                   then logHistoryRepository.insertMany(logs)
                   else Future.unit
         yield logger.info(s"Successfully added ${logs.size} ${logMetricId} logs for ${environment.asString}")
+
+
+  def insertProvisioningMetrics(environment: Environment, from: Instant, to: Instant, knownServices: Seq[Service])(using HeaderCarrier): Future[Unit] =
+    for
+      metrics <- knownServices.foldLeftM[Future, Seq[ServiceProvisionRepository.Metric]](Seq.empty): (acc, service) =>
+                   carbonApiConnector
+                     .getProvisioningMetrics(environment, service.name, from = from, to = to)
+                     .map: xs =>
+                       acc :+ ServiceProvisionRepository.Metric(
+                         timestamp   = from
+                       , since       = to
+                       , service     = service.name
+                       , environment = environment
+                       , metrics     = xs.map(x => x.label -> x.value).toMap
+                       )
+      _       <- serviceProvisionRepository.insertMany(metrics)
+    yield logger.info(s"Successfully inserted provisioning metrics for ${environment.asString}")
 
 object MetricsService:
   /** @param filterOut is used to filter metrics later, when querying metrics endpoint for a db

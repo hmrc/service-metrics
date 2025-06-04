@@ -58,14 +58,14 @@ class MetricsScheduler @Inject()(
   , lock            = ScheduledLockService(lockRepository, "metrics-scheduler", timestampSupport, schedulerConfig.interval)
   ):
     val envs = Environment.applicableValues
-    logger.info(s"Updating mongo metrics for ${envs.mkString(", ")}")
+    logger.info(s"Updating metrics for ${envs.mkString(", ")}")
     for
       knownServices <- metricsService.knownServices()
       from          =  Instant.now().minus(schedulerConfig.interval.toMillis, ChronoUnit.MILLIS)
       to            =  Instant.now()
       _             <- envs.foldLeftM(()): (_, env) =>
                          updatePerEnvironment(env, from, to, knownServices)
-    yield logger.info(s"Finished updating mongo metrics for ${envs.mkString(", ")}")
+    yield logger.info(s"Finished updating metrics for ${envs.mkString(", ")}")
 
   private def updatePerEnvironment(env: Environment, from: Instant, to: Instant, knownServices: Seq[Service])(using HeaderCarrier) =
     for
@@ -78,4 +78,8 @@ class MetricsScheduler @Inject()(
                       .insertLogHistory(env, from, to, knownServices, dbMappings)
                       .recover:
                         case NonFatal(e) => logger.error(s"Failed to insert log history for ${env.asString}", e)
+      _          <- metricsService
+                      .insertProvisioningMetrics(env, from, to, knownServices)
+                      .recover:
+                        case NonFatal(e) => logger.error(s"Failed to insert provisioning metrics for ${env.asString}", e)
     yield ()
