@@ -30,7 +30,7 @@ import uk.gov.hmrc.servicemetrics.connector._
 import uk.gov.hmrc.servicemetrics.connector.GitHubProxyConnector.DbOverride
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.Service
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, LogHistoryRepository}
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, MongoCollectionSizeHistoryRepository, LogHistoryRepository, ServiceProvisionRepository}
 
 import java.time.LocalDate
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -56,6 +56,7 @@ class MetricsServiceSpec
     val mockLatestMongoCollectionSizeRepository  = mock[LatestMongoCollectionSizeRepository]
     val mockMongoCollectionSizeHistoryRepository = mock[MongoCollectionSizeHistoryRepository]
     val mockLogHistoryRepository                 = mock[LogHistoryRepository]
+    val mockServiceProvisionRepository           = mock[ServiceProvisionRepository]
 
     val service = MetricsService(
       appConfig
@@ -67,6 +68,7 @@ class MetricsServiceSpec
     , mockLatestMongoCollectionSizeRepository
     , mockMongoCollectionSizeHistoryRepository
     , mockLogHistoryRepository
+    , mockServiceProvisionRepository
     )
 
   given hc: HeaderCarrier = HeaderCarrier()
@@ -106,12 +108,12 @@ class MetricsServiceSpec
         MetricsService.DbMapping("service", "database", Seq("service-frontend"), Seq("team-one")),
       )
 
-      when(mockCarbonApiConnector.getCollectionSizes(any[Environment], any[String])(using any[HeaderCarrier]))
+      when(mockCarbonApiConnector.getCollectionSizes(any[Environment], any[String], any[Instant], any[Instant])(using any[HeaderCarrier]))
         .thenReturn(Future.successful(
-          CarbonApiConnector.MongoCollectionSizeMetric(
-            metricLabel = "collection-one"
-          , sizeBytes   = BigDecimal(1000)
-          , timestamp   = Instant.now()
+          CarbonApiConnector.Metric(
+            label     = "collection-one"
+          , value     = BigDecimal(1000)
+          , timestamp = Instant.now()
           ) :: Nil
         ))
 
@@ -126,7 +128,7 @@ class MetricsServiceSpec
 
       val mcs = Seq(MongoCollectionSize("database", "collection-one", BigDecimal(1000), LocalDate.now(), Environment.QA, "service"))
 
-      service.updateCollectionSizes(Environment.QA, dbMapping).futureValue
+      service.updateCollectionSizes(Environment.QA, from = Instant.now().minusSeconds(20), to = Instant.now(), dbMapping).futureValue
 
       verify(mockMongoCollectionSizeHistoryRepository, times(1)).historyExists(Environment.QA, LocalDate.now().minusDays(1))
       verify(mockLatestMongoCollectionSizeRepository , times(1)).putAll(mcs, Environment.QA)
@@ -137,12 +139,12 @@ class MetricsServiceSpec
         MetricsService.DbMapping(("service"), "database", Seq("service-frontend"), Seq("team-one")),
       )
 
-      when(mockCarbonApiConnector.getCollectionSizes(any[Environment], any[String])(using any[HeaderCarrier]))
+      when(mockCarbonApiConnector.getCollectionSizes(any[Environment], any[String], any[Instant], any[Instant])(using any[HeaderCarrier]))
         .thenReturn(Future.successful(
-          CarbonApiConnector.MongoCollectionSizeMetric(
-            metricLabel = "collection-one"
-          , sizeBytes   = BigDecimal(1000)
-          , timestamp   = Instant.now()
+          CarbonApiConnector.Metric(
+            label     = "collection-one"
+          , value     = BigDecimal(1000)
+          , timestamp = Instant.now()
           ) :: Nil
         ))
 
@@ -154,7 +156,7 @@ class MetricsServiceSpec
 
       val mcs = Seq(MongoCollectionSize("database", "collection-one", BigDecimal(1000), LocalDate.now(), Environment.QA, "service"))
 
-      service.updateCollectionSizes(Environment.QA, dbMapping).futureValue
+      service.updateCollectionSizes(Environment.QA, from = Instant.now().minusSeconds(20), to = Instant.now(), dbMapping).futureValue
 
       verify(mockMongoCollectionSizeHistoryRepository, times(1)).historyExists(Environment.QA, LocalDate.now().minusDays(1))
       verify(mockLatestMongoCollectionSizeRepository , times(1)).putAll(mcs, Environment.QA)
@@ -182,7 +184,7 @@ class MetricsServiceSpec
           .thenReturn(Future.unit)
 
         service
-          .insertLogHistory(Environment.QA, Instant.now().minusSeconds(20), Instant.now(), knownServices, service.dbMappings(Environment.QA, knownServices).futureValue)
+          .insertLogHistory(Environment.QA, from = Instant.now().minusSeconds(20), to = Instant.now(), knownServices, service.dbMappings(Environment.QA, knownServices).futureValue)
           .futureValue shouldBe a[Unit]
 
         verify(mockClickHouseConnector, times(1))
