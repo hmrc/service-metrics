@@ -20,7 +20,6 @@ lazy val microservice = Project("service-metrics", file("."))
     , "uk.gov.hmrc.servicemetrics.config.AppConfig.LogMetricId"
     )
   )
-  .settings(resolvers += Resolver.jcenterRepo)
   .settings(CodeCoverageSettings.settings: _*)
 
 lazy val it =

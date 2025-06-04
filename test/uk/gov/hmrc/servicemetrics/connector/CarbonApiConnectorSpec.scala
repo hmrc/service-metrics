@@ -26,7 +26,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.MongoCollectionSizeMetric
+import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.Metric
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
@@ -89,15 +89,15 @@ class CarbonApiConnectorSpec
               )
 
       val expected = Seq(
-        MongoCollectionSizeMetric(
-          metricLabel = "mongo-service-one-collection-one",
-          sizeBytes   = BigDecimal(1676590),
-          timestamp   = Instant.ofEpochSecond(1675606800)
+        Metric(
+          label     = "mongo-service-one-collection-one",
+          value     = BigDecimal(1676590),
+          timestamp = Instant.ofEpochSecond(1675606800)
         ),
-        MongoCollectionSizeMetric(
-          metricLabel = "mongo-service-one-collection-two",
-          sizeBytes   = BigDecimal(79688835),
-          timestamp   = Instant.ofEpochSecond(1675606800)
+        Metric(
+          label     = "mongo-service-one-collection-two",
+          value     = BigDecimal(79688835),
+          timestamp = Instant.ofEpochSecond(1675606800)
         )
       )
 

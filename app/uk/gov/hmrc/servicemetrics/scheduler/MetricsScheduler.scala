@@ -78,4 +78,8 @@ class MetricsScheduler @Inject()(
                       .insertLogHistory(env, from, to, knownServices, dbMappings)
                       .recover:
                         case NonFatal(e) => logger.error(s"Failed to insert log history for ${env.asString}", e)
+      _          <- metricsService
+                      .insertProvisioningMetrics(env, from, to, knownServices)
+                      .recover:
+                        case NonFatal(e) => logger.error(s"Failed to insert provisioning metrics for ${env.asString}", e)
     yield ()

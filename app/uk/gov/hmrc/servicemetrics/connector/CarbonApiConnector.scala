@@ -22,7 +22,6 @@ import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
-import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.MongoCollectionSizeMetric
 import uk.gov.hmrc.servicemetrics.model.Environment
 
 import java.time.Instant
@@ -36,35 +35,54 @@ class CarbonApiConnector @Inject()(
 )(using
   ExecutionContext
 ):
+  import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.Metric
 
   private val carbonApiBaseUrl: String = servicesConfig.baseUrl("carbon-api")
 
   def getCollectionSizes(
     environment: Environment,
     database   : String
-  )(using HeaderCarrier): Future[Seq[MongoCollectionSizeMetric]] =
-    val baseUrl = carbonApiBaseUrl.replace("$env", environment.asString)
+  )(using HeaderCarrier): Future[Seq[Metric]] =
+    getMetric(
+      env     = environment
+    , targets = s"groupByNode(collectd.*_mongo_*.mongo-$database-*.file_size-data,2,'max')" :: Nil
+    , to      = Instant.now()
+    , from    = Instant.now().minusSeconds(3600)
+    )
 
-    given Reads[MongoCollectionSizeMetric] = MongoCollectionSizeMetric.reads
+  def getProvisioningMetrics(
+    environment: Environment
+  , service    : String
+  )(using HeaderCarrier): Future[Seq[Metric]] =
+    getMetric(
+      env     = environment
+    , targets = s"alias(summarize(aggregate(stats.ip-*.counters.logstash.ecs-*-mdtp-host.nginx.$service.*.mdtp.count, 'sum'), '1mon', 'sum', true), 'Requests')"                                                 ::
+                s"alias(summarize(aggregate(stats.ip-*.timers.logstash.ecs-*-mdtp-host.nginx.$service.*.mdtp.request_time.mean, 'average'), '1mon', 'average', true), 'Time')"                                   ::
+                s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved, 'count'), '1mon', 'avg', true), 'Instances')"                                             ::
+                s"alias(summarize(scale(sumSeries(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved), 7.450581e-9), '1mon', 'avg', false), 'Slots')"                                     ::
+                s"alias(maximumAbove(group(aliasByNode(container-insights.*-mdtp.*$service*.Container.$service.*.memory-utilized,5),aliasByNode(container-insights.*.$service.memory-utilized,1)),0), 'Memory')" ::
+                Nil
+    , to      = Instant.now()
+    , from    = Instant.now().minusSeconds(3600)
+    ).map: xs =>
+      xs ++ xs.filter(_.label == "Memory").maxByOption(_.value)
 
-    val to   = Instant.now()
-    val from = to.minusSeconds(3600)
-
+  private def getMetric(env: Environment, targets: Seq[String], from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[Metric]] =
+    given Reads[Metric] = Metric.reads
     httpClientV2
-      .get(url"$baseUrl/render?target=groupByNode(collectd.*_mongo_*.mongo-$database-*.file_size-data,2,'max')&from=${from.getEpochSecond}&to=${to.getEpochSecond}&format=json&maxDataPoints=1")
-      .execute[Seq[MongoCollectionSizeMetric]]
+      .get(url"${carbonApiBaseUrl.replace("$env", env.asString)}/render?target=$targets&from=${from.getEpochSecond}&to=${to.getEpochSecond}&format=json&maxDataPoints=1")
+      .execute[Seq[Metric]]
 
 object CarbonApiConnector:
 
-  case class MongoCollectionSizeMetric(
-    metricLabel: String,
-    sizeBytes  : BigDecimal,
-    timestamp  : Instant
+  case class Metric(
+    label    : String,
+    value    : BigDecimal,
+    timestamp: Instant
   )
 
-  object MongoCollectionSizeMetric:
-
-    val reads: Reads[MongoCollectionSizeMetric] =
+  object Metric:
+    val reads: Reads[Metric] =
       ( (__ \ "target"            ).read[String]
       ~ (__ \ "datapoints" \ 0 \ 0).read[BigDecimal]
       ~ (__ \ "datapoints" \ 0 \ 1).read[Long].map(Instant.ofEpochSecond)
