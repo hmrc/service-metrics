@@ -18,7 +18,7 @@ package uk.gov.hmrc.servicemetrics
 
 import play.api.inject.Binding
 import play.api.{Configuration, Environment}
-import uk.gov.hmrc.servicemetrics.scheduler.{MetricsScheduler, NotificationsScheduler}
+import uk.gov.hmrc.servicemetrics.scheduler.{MetricsScheduler, NotificationsScheduler, ProvisioningScheduler}
 
 class Module extends play.api.inject.Module:
 
@@ -26,4 +26,5 @@ class Module extends play.api.inject.Module:
     Seq(
       bind[MetricsScheduler      ].toSelf.eagerly()
     , bind[NotificationsScheduler].toSelf.eagerly()
+    , bind[ProvisioningScheduler ].toSelf.eagerly()
     )

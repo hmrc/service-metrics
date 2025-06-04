@@ -31,10 +31,9 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
-import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.Service
 
 @Singleton
-class MetricsScheduler @Inject()(
+class ProvisioningScheduler @Inject()(
   configuration   : Configuration
 , lockRepository  : MongoLockRepository
 , timestampSupport: TimestampSupport
@@ -50,36 +49,22 @@ class MetricsScheduler @Inject()(
   private given HeaderCarrier = HeaderCarrier()
 
   private val schedulerConfig: SchedulerConfig =
-    SchedulerConfig(configuration, "scheduler.metrics")
+    SchedulerConfig(configuration, "scheduler.provisioning")
 
   scheduleWithLock(
-    label           = "Metrics Scheduler"
+    label           = "Provisioning Scheduler"
   , schedulerConfig = schedulerConfig
-  , lock            = ScheduledLockService(lockRepository, "metrics-scheduler", timestampSupport, schedulerConfig.interval)
+  , lock            = ScheduledLockService(lockRepository, "provisioning-scheduler", timestampSupport, schedulerConfig.interval)
   ):
     val envs = Environment.applicableValues
-    logger.info(s"Updating metrics for ${envs.mkString(", ")}")
+    logger.info(s"Updating provisioning for ${envs.mkString(", ")}")
     for
       knownServices <- metricsService.knownServices()
       from          =  Instant.now().minus(schedulerConfig.interval.toMillis, ChronoUnit.MILLIS)
       to            =  Instant.now()
       _             <- envs.foldLeftM(()): (_, env) =>
-                         updatePerEnvironment(env, from, to, knownServices)
-    yield logger.info(s"Finished updating metrics for ${envs.mkString(", ")}")
-
-  private def updatePerEnvironment(env: Environment, from: Instant, to: Instant, knownServices: Seq[Service])(using HeaderCarrier) =
-    for
-      dbMappings <- metricsService.dbMappings(env, knownServices)
-      _          <- metricsService
-                      .updateCollectionSizes(env, dbMappings)
-                      .recover:
-                        case NonFatal(e) => logger.error(s"Failed to update mongo collection sizes for ${env.asString}", e)
-      _          <- metricsService
-                      .insertLogHistory(env, from, to, knownServices, dbMappings)
-                      .recover:
-                        case NonFatal(e) => logger.error(s"Failed to insert log history for ${env.asString}", e)
-      _          <- metricsService
-                      .insertProvisioningMetrics(env, from, to, knownServices)
-                      .recover:
-                        case NonFatal(e) => logger.error(s"Failed to insert provisioning metrics for ${env.asString}", e)
-    yield ()
+                         metricsService
+                           .insertProvisioningMetrics(env, from, to, knownServices)
+                           .recover:
+                             case NonFatal(e) => logger.error(s"Failed to insert provisioning metrics for ${env.asString}", e)
+    yield logger.info(s"Finished updating provisioning metrics for ${envs.mkString(", ")}")
