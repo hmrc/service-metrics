@@ -62,7 +62,7 @@ class CarbonApiConnector @Inject()(
       env     = environment
     , targets = s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_[2-5][0-9][0-9].sum, 'sum'), '1mon', 'sum', false), 'requests')"                                                                   ::
                 s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_time.mean.avg, 'average'), '1mon', 'average', false), 'time', false)"                                                              ::
-                s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved, 'count'), '1mon', 'avg', true), 'instances')"  /* counts per instance of metric */        ::
+                s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved, 'count'), '1mon', 'avg', false), 'instances')"  /* counts per instance of metric */       ::
                 s"alias(summarize(scale(sumSeries(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved), 7.450581e-9), '1mon', 'avg', false), 'slots')"  /* 1 / (128 * 1024 * 1024) */      ::
                 s"alias(maximumAbove(group(aliasByNode(container-insights.*-mdtp.*$service*.Container.$service.*.memory-utilized,5),aliasByNode(container-insights.*.$service.memory-utilized,1)),0), 'memory')" ::
                 Nil
