@@ -74,7 +74,7 @@ class CarbonApiConnector @Inject()(
   private def getMetric(env: Environment, targets: Seq[String], from: Instant, to: Instant)(using HeaderCarrier): Future[Seq[Metric]] =
     given Reads[Metric] = Metric.reads
     httpClientV2
-      .get(url"${carbonApiBaseUrl.replace("$env", env.asString)}/render?target=$targets&from=${from.getEpochSecond}&to=${to.getEpochSecond}&format=json&maxDataPoints=1")
+      .get(url"${carbonApiBaseUrl.replace("$env", env.asString)}/render?target=$targets&from=${from.getEpochSecond}&until=${to.getEpochSecond}&format=json&maxDataPoints=1")
       .execute[Seq[Metric]]
 
 object CarbonApiConnector:
