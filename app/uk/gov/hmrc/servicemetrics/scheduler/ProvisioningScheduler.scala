@@ -72,8 +72,8 @@ class ProvisioningScheduler @Inject()(
                  then Future.successful(logger.info("Not updating provisioning metrics - last month has already been stored"))
                  else
                   val t1   = LocalDate.now.minusMonths(1)
-                  val to   = t1.`with`(TemporalAdjusters.firstDayOfMonth).atStartOfDay(ZoneOffset.UTC).toInstant
-                  val from = t1.`with`(TemporalAdjusters.lastDayOfMonth ).atTime(LocalTime.MIDNIGHT  ).toInstant(ZoneOffset.UTC)
+                  val from = t1.`with`(TemporalAdjusters.firstDayOfMonth).atStartOfDay(ZoneOffset.UTC).toInstant
+                  val to   = t1.`with`(TemporalAdjusters.lastDayOfMonth ).atTime(LocalTime.MIDNIGHT  ).toInstant(ZoneOffset.UTC)
                   envs.map:
                     env => (env -> wrw.collect { case x if x.deployments.exists(_.environment == env) => x.serviceName })
                   .foldLeftM(()):
