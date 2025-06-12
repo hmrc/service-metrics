@@ -54,13 +54,14 @@ class CarbonApiConnector @Inject()(
     )
 
   // To test ssh into service-metrics. To get 1 months data add a target from below replacing $service
-  // curl -G 'http://see-app-config-base/render?&from=1746057600&until=1748649600&format=json' --data-urlencode "target="
+  // curl -G 'http://see-app-config-base/render?&from=1746057600&until=1748735999&format=json' --data-urlencode "target="
   def getProvisioningMetrics(
     environment: Environment
   , service    : String
   , from       : Instant
   , to         : Instant
   )(using HeaderCarrier): Future[Seq[Metric]] =
+    Thread.sleep(1000)
     getMetric(
       env           = environment
     , targets       = s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_[2-5][0-9][0-9].sum, 'sum'), '1year', 'sum', false), 'requests')" /* 1month returns multiple buckets so using 1year */                                                                  ::
