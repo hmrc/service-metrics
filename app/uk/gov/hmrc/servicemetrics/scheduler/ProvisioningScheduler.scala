@@ -73,7 +73,7 @@ class ProvisioningScheduler @Inject()(
                  else
                   val t1   = LocalDate.now.minusMonths(1)
                   val from = t1.`with`(TemporalAdjusters.firstDayOfMonth).atStartOfDay(ZoneOffset.UTC).toInstant
-                  val to   = t1.`with`(TemporalAdjusters.lastDayOfMonth ).atTime(LocalTime.MIDNIGHT  ).toInstant(ZoneOffset.UTC)
+                  val to   = t1.`with`(TemporalAdjusters.lastDayOfMonth ).atTime(LocalTime.MAX       ).toInstant(ZoneOffset.UTC)
                   envs.map:
                     env => (env -> wrw.collect { case x if x.deployments.exists(_.environment == env) => x.serviceName })
                   .foldLeftM(()):
