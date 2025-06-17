@@ -18,13 +18,13 @@ package uk.gov.hmrc.servicemetrics
 
 import play.api.inject.Binding
 import play.api.{Configuration, Environment}
-import uk.gov.hmrc.servicemetrics.scheduler.{MetricsScheduler, NotificationsScheduler, ProvisioningScheduler}
+import uk.gov.hmrc.servicemetrics.scheduler.{MetricsScheduler, NotificationsScheduler, ServiceProvisionScheduler}
 
 class Module extends play.api.inject.Module:
 
   override def bindings(environment: Environment, configuration: Configuration): Seq[Binding[_]] =
     Seq(
-      bind[MetricsScheduler      ].toSelf.eagerly()
-    , bind[NotificationsScheduler].toSelf.eagerly()
-    , bind[ProvisioningScheduler ].toSelf.eagerly()
+      bind[MetricsScheduler         ].toSelf.eagerly()
+    , bind[NotificationsScheduler   ].toSelf.eagerly()
+    , bind[ServiceProvisionScheduler].toSelf.eagerly()
     )

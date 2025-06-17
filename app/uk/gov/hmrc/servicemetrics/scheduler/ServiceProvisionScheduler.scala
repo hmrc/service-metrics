@@ -34,7 +34,7 @@ import java.time.temporal.TemporalAdjusters
 import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
-class ProvisioningScheduler @Inject()(
+class ServiceProvisionScheduler @Inject()(
   configuration       : Configuration
 , lockRepository      : MongoLockRepository
 , lastRunRepository   : LastRunRepository
@@ -52,31 +52,36 @@ class ProvisioningScheduler @Inject()(
   private given HeaderCarrier = HeaderCarrier()
 
   private val schedulerConfig: SchedulerConfig =
-    SchedulerConfig(configuration, "scheduler.provisioning")
+    SchedulerConfig(configuration, "scheduler.service-provision")
 
   private def month(instant: Instant) =
     LocalDate.ofInstant(instant, ZoneOffset.UTC).getMonthValue
 
+  private val ignoreServices = configuration.get[Seq[String]]("scheduler.service-provision.ignore")
+
   scheduleWithLock(
-    label           = "Provisioning Scheduler"
+    label           = "Service Provision Scheduler"
   , schedulerConfig = schedulerConfig
-  , lock            = ScheduledLockService(lockRepository, "provisioning-scheduler", timestampSupport, schedulerConfig.interval)
+  , lock            = ScheduledLockService(lockRepository, "service-provision-scheduler", timestampSupport, schedulerConfig.interval)
   ):
     val envs = Environment.applicableValues
-    logger.info(s"Updating provisioning for ${envs.mkString(", ")}")
+    logger.info(s"Updating service provision for ${envs.mkString(", ")}")
     for
-      wrw     <- releasesApiConnector.whatsRunningWhere()
+      wrw     <- releasesApiConnector
+                    .whatsRunningWhere()
+                    .map(_.filterNot(x => ignoreServices.contains(x.serviceName)))
       lastRun <- lastRunRepository.getLastRun()
-      now     =  Instant.now
+      now     =  Instant.now()
       _       <- if   lastRun.fold(-1)(month) == month(now)
-                 then Future.successful(logger.info("Not updating provisioning metrics - last month has already been stored"))
+                 then Future.successful(logger.info("Not updating service provision metrics - last month has already been stored"))
                  else
-                  val t1   = LocalDate.now.minusMonths(1)
-                  val from = t1.`with`(TemporalAdjusters.firstDayOfMonth).atStartOfDay(ZoneOffset.UTC).toInstant
-                  val to   = t1.`with`(TemporalAdjusters.lastDayOfMonth ).atTime(LocalTime.MAX       ).toInstant(ZoneOffset.UTC)
-                  envs.map:
-                    env => (env -> wrw.collect { case x if x.deployments.exists(_.environment == env) => x.serviceName })
-                  .foldLeftM(()):
-                    case (_, (env, services)) => metricsService.insertProvisioningMetrics(env, from = from, to = to, services)
+                   val t1   = LocalDate.now().minusMonths(1)
+                   val from = t1.`with`(TemporalAdjusters.firstDayOfMonth).atStartOfDay(ZoneOffset.UTC).toInstant
+                   val to   = t1.`with`(TemporalAdjusters.lastDayOfMonth ).atTime(LocalTime.MAX       ).toInstant(ZoneOffset.UTC)
+                   envs
+                     .map: env =>
+                       (env -> wrw.collect { case x if x.deployments.exists(_.environment == env) => x.serviceName })
+                     .foldLeftM(()):
+                       case (_, (env, services)) => metricsService.insertServiceProvisionMetrics(env, from = from, to = to, services)
       _       <- lastRunRepository.setLastRun(now)
-    yield logger.info(s"Finished updating provisioning metrics for ${envs.mkString(", ")}")
+    yield logger.info(s"Finished updating service provision metrics for ${envs.mkString(", ")}")
