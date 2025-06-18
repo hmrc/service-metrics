@@ -39,19 +39,19 @@ class ServiceProvisionRepository @Inject()(
 ) extends PlayMongoRepository(
   mongoComponent = mongoComponent
 , collectionName = "serviceProvision"
-, domainFormat   = ServiceProvisionRepository.Metric.format
+, domainFormat   = ServiceProvisionRepository.ServiceProvision.mongoFormat
 , indexes        = IndexModel(Indexes.ascending("service"))                                              ::
                    IndexModel(Indexes.ascending("since"))                                                ::
                    IndexModel(Indexes.ascending("from"), IndexOptions().expireAfter(730, TimeUnit.DAYS)) ::
                    IndexModel(Indexes.ascending("environment"))                                          ::
                    Nil
-, extraCodecs    = Seq(Codecs.playFormatCodec(ServiceProvisionRepository.Metric.format))
+, extraCodecs    = Seq(Codecs.playFormatCodec(ServiceProvisionRepository.ServiceProvision.mongoFormat))
 ) with Transactions:
 
   private given TransactionConfiguration = TransactionConfiguration.strict
 
   import scala.math.Ordered.orderingToOrdered
-  def insertMany(environment: Environment, from: Instant, to: Instant, metrics: Seq[ServiceProvisionRepository.Metric]): Future[Unit] =
+  def insertMany(environment: Environment, from: Instant, to: Instant, metrics: Seq[ServiceProvisionRepository.ServiceProvision]): Future[Unit] =
     if  metrics.exists(_.environment != environment) then
       Future.failed(sys.error(s"${environment.asString} does not match service provision metrics ${metrics.collect { case x if x.environment != environment => x.environment}.distinct.mkString(", ")}"))
     else if metrics.exists(x => x.from < from || x.to > to) then
@@ -67,8 +67,25 @@ class ServiceProvisionRepository @Inject()(
           _ <- collection.insertMany(session, metrics).toFuture()
         yield ()
 
+  def find(
+     services   : Option[Seq[String]] = None
+  ,  environment: Option[Environment] = None
+  ,  from       : Instant
+  ,  to         : Instant
+  ): Future[Seq[ServiceProvisionRepository.ServiceProvision]] =
+    collection
+      .find(
+        Filters.and(
+          services.fold(Filters.empty)(s => Filters.in("service", s:_*))
+        , environment.fold(Filters.empty())(e => Filters.equal("environment", e.asString))
+        , Filters.gte("from"    , from)
+        , Filters.lte("to"      , to  )
+        )
+      )
+      .toFuture()
+
 object ServiceProvisionRepository:
-  case class Metric(
+  case class ServiceProvision(
     from       : Instant
   , to         : Instant
   , service    : String
@@ -76,12 +93,20 @@ object ServiceProvisionRepository:
   , metrics    : Map[String, BigDecimal]
   )
 
-  object Metric :
-    val format: Format[Metric] =
+  object ServiceProvision :
+    val mongoFormat: Format[ServiceProvision] =
       given Format[Instant] = MongoJavatimeFormats.instantFormat
       ( (__ \ "from"       ).format[Instant]
       ~ (__ \ "to"         ).format[Instant]
       ~ (__ \ "service"    ).format[String]
       ~ (__ \ "environment").format[Environment]
       ~ (__ \ "metrics"    ).format[Map[String, BigDecimal]]
-      )(Metric.apply, pt => Tuple.fromProductTyped(pt))
+      )(ServiceProvision.apply, pt => Tuple.fromProductTyped(pt))
+
+    val apiWrites: Writes[ServiceProvision] =
+      ( (__ \ "from"       ).write[Instant]
+      ~ (__ \ "to"         ).write[Instant]
+      ~ (__ \ "service"    ).write[String]
+      ~ (__ \ "environment").write[Environment]
+      ~ (__ \ "metrics"    ).write[Map[String, BigDecimal]]
+      )(pt => Tuple.fromProductTyped(pt))

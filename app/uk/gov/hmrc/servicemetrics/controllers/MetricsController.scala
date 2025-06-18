@@ -24,10 +24,11 @@ import uk.gov.hmrc.servicemetrics.config.AppConfig
 import uk.gov.hmrc.servicemetrics.config.AppConfig.LogMetricId
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector
 import uk.gov.hmrc.servicemetrics.model.{Environment, MongoCollectionSize}
-import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, LogHistoryRepository}
+import uk.gov.hmrc.servicemetrics.persistence.{LatestMongoCollectionSizeRepository, LogHistoryRepository, ServiceProvisionRepository}
 
 import javax.inject.{Inject, Singleton}
-import java.time.Instant
+import java.time.{Instant, LocalDate, LocalTime, ZoneOffset}
+import java.time.temporal.TemporalAdjusters
 import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton()
@@ -36,6 +37,7 @@ class MetricsController @Inject()(
 , appConfig                          : AppConfig
 , latestMongoCollectionSizeRepository: LatestMongoCollectionSizeRepository
 , logHistoryRepository               : LogHistoryRepository
+, serviceProvisionRepository         : ServiceProvisionRepository
 , teamsAndRepositoriesConnector      : TeamsAndRepositoriesConnector
 )(using
   ExecutionContext
@@ -57,7 +59,7 @@ class MetricsController @Inject()(
     Action.async:
       given Writes[MetricsController.LogMetric] = MetricsController.LogMetric.write
       for
-        history     <- logHistoryRepository.find(services = Some(Seq(service)), from = from, to = to.getOrElse(Instant.now))
+        history     <- logHistoryRepository.find(services = Some(Seq(service)), from = from, to = to.getOrElse(Instant.now()))
         collections <- latestMongoCollectionSizeRepository.find(Some(Seq(service)))
         results     =  appConfig.logMetrics.collect:
                          case (logMetricId, logMetric) if logMetric.showInCatalogue =>
@@ -103,7 +105,7 @@ class MetricsController @Inject()(
                          , environment = environment
                          , metricType  = metricType
                          , from        = from
-                         , to          = to.getOrElse(Instant.now)
+                         , to          = to.getOrElse(Instant.now())
                          )
         collections   <- latestMongoCollectionSizeRepository.find(oServiceNames, environment)
         results       =  history
@@ -125,6 +127,27 @@ class MetricsController @Inject()(
                                )
                            .toSeq
       yield Ok(Json.toJson(results.sortBy(_.service)))
+
+  def getServiceProvision(
+    environment   : Option[Environment]
+  , teamName      : Option[String]
+  , digitalService: Option[String]
+  , oFrom         : Option[Instant]
+  , oTo           : Option[Instant]
+  ): Action[AnyContent] =
+    Action.async: request =>
+      given RequestHeader = request
+      given Writes[ServiceProvisionRepository.ServiceProvision] = ServiceProvisionRepository.ServiceProvision.apiWrites
+
+      val from = oFrom.getOrElse(LocalDate.now().minusMonths(1).`with`(TemporalAdjusters.firstDayOfMonth).atStartOfDay(ZoneOffset.UTC).toInstant)
+      val to   = oTo  .getOrElse(LocalDate.now().minusMonths(1).`with`(TemporalAdjusters.lastDayOfMonth ).atTime(LocalTime.MAX       ).toInstant(ZoneOffset.UTC))
+
+      for
+        oServiceNames <- (teamName, digitalService) match
+                            case (None, None) => Future.successful(None)
+                            case _            => teamsAndRepositoriesConnector.findServices(teamName, digitalService).map(services => Some(services.map(_.name)))
+        metrics       <- serviceProvisionRepository.find(oServiceNames, environment, from = from, to = to)
+      yield Ok(Json.toJson(metrics))
 
 object MetricsController:
   import play.api.libs.functional.syntax._

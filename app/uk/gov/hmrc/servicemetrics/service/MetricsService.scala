@@ -161,13 +161,13 @@ class MetricsService @Inject()(
                   else Future.unit
         yield logger.info(s"Successfully added ${logs.size} ${logMetricId} logs for ${environment.asString}")
 
-  def insertProvisioningMetrics(environment: Environment, from: Instant, to: Instant, services: Seq[String])(using HeaderCarrier): Future[Unit] =
+  def insertServiceProvisionMetrics(environment: Environment, from: Instant, to: Instant, services: Seq[String])(using HeaderCarrier): Future[Unit] =
     for
-      metrics <- services.foldLeftM[Future, Seq[ServiceProvisionRepository.Metric]](Seq.empty): (acc, service) =>
+      metrics <- services.foldLeftM[Future, Seq[ServiceProvisionRepository.ServiceProvision]](Seq.empty): (acc, service) =>
                    carbonApiConnector
-                     .getProvisioningMetrics(environment, service, from = from, to = to)
+                     .getServiceProvisionMetrics(environment, service, from = from, to = to)
                      .map: xs =>
-                       acc :+ ServiceProvisionRepository.Metric(
+                       acc :+ ServiceProvisionRepository.ServiceProvision(
                          from        = from
                        , to          = to
                        , service     = service
@@ -175,7 +175,7 @@ class MetricsService @Inject()(
                        , metrics     = xs.map(x => x.label -> x.value).toMap
                        )
       _       <- serviceProvisionRepository.insertMany(environment, from = from, to = to, metrics)
-    yield logger.info(s"Successfully inserted provisioning metrics for ${environment.asString}")
+    yield logger.info(s"Successfully inserted service provision metrics for ${environment.asString}")
 
 object MetricsService:
   /** @param filterOut is used to filter metrics later, when querying metrics endpoint for a db
