@@ -172,7 +172,9 @@ class MetricsService @Inject()(
                        , to          = to
                        , service     = service
                        , environment = environment
-                       , metrics     = xs.map(x => x.label -> x.value).toMap
+                       , metrics     = if   xs.nonEmpty
+                                       then Map("requests" -> BigDecimal(0)) ++ xs.map(x => x.label -> x.value).toMap
+                                       else Map.empty
                        )
       _       <- serviceProvisionRepository.insertMany(environment, from = from, to = to, metrics)
     yield logger.info(s"Successfully inserted service provision metrics for ${environment.asString}")
