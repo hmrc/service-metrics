@@ -166,15 +166,13 @@ class MetricsService @Inject()(
       metrics <- services.foldLeftM[Future, Seq[ServiceProvisionRepository.ServiceProvision]](Seq.empty): (acc, service) =>
                    carbonApiConnector
                      .getServiceProvisionMetrics(environment, service, from = from, to = to)
-                     .map: xs =>
+                     .map: metrics =>
                        acc :+ ServiceProvisionRepository.ServiceProvision(
                          from        = from
                        , to          = to
                        , service     = service
                        , environment = environment
-                       , metrics     = if   xs.nonEmpty
-                                       then Map("requests" -> BigDecimal(0)) ++ xs.map(x => x.label -> x.value).toMap
-                                       else Map.empty
+                       , metrics     = metrics
                        )
       _       <- serviceProvisionRepository.insertMany(environment, from = from, to = to, metrics)
     yield logger.info(s"Successfully inserted service provision metrics for ${environment.asString}")
