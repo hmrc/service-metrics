@@ -60,19 +60,23 @@ class CarbonApiConnector @Inject()(
   , service    : String
   , from       : Instant
   , to         : Instant
-  )(using HeaderCarrier): Future[Seq[Metric]] =
+  )(using HeaderCarrier): Future[Map[String, BigDecimal]] =
+    def byteToMebibyte(bd: BigDecimal): BigDecimal = bd / BigDecimal(1048576)
+
     getMetric(
       env           = environment
-    , targets       = s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_[2-5][0-9][0-9].sum, 'sum'), '1year', 'sum', false), 'requests')" /* 1month returns multiple buckets so using 1year */                                                                  ::
-                      s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_time.mean.avg, 'average'), '1year', 'average', false), 'time')"                                                                                                                         ::
-                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved, 'count'), '1year', 'average', false), 'instances')"  /* counts per instance of metric */                                                       ::
-                      s"alias(summarize(scale(sumSeries(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved), 7.450581e-9), '1year', 'avg', false), 'slots')"  /* 1 / (128 * 1024 * 1024) */                                                          ::
-                      s"alias(summarize(aggregate(maximumAbove(group(aliasByNode(container-insights.*-mdtp.*$service*.Container.$service.*.memory-utilized,5),aliasByNode(container-insights.*.$service.memory-utilized,1)),0), 'max'), '1year', 'max', false) , 'memory')" ::
+    , targets       = s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_[2-5][0-9][0-9].sum, 'sum'), '1year', 'sum', false), 'requests')"                               :: // 1month returns multiple buckets so using 1year
+                      s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_time.mean.avg, 'average'), '1year', 'average', false), 'time')"                                 ::
+                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved, 'count'), '1year', 'average', false), 'instances')"    :: // counts per instance of metric
+                      s"alias(summarize(scale(sumSeries(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved), 7.450581e-9), '1year', 'avg', false), 'slots')" :: // (128 * 1024 * 1024)
+                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-utilized, 'max'), '1year', 'max', false) , 'memory')"            :: // max memory in byte for instance
                       Nil
     , from          = from
     , to            = to
     , maxDataPoints = None // Need to set to a high number (like 1000) or not at all otherwise values are "consolidated"  https://graphite.readthedocs.io/en/latest/render_api.html#maxdatapoints
-    )
+    ).map:
+      case xs if xs.nonEmpty => Map("requests" -> BigDecimal(0)) ++ xs.map(x => x.label -> x.value).toMap.updatedWith("memory")(_.map(byteToMebibyte))
+      case _                 => Map.empty
 
   private def getMetric(
     env          : Environment
