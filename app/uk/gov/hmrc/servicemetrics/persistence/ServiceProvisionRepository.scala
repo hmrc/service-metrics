@@ -17,7 +17,7 @@
 package uk.gov.hmrc.servicemetrics.persistence
 
 import org.mongodb.scala.ObservableFuture
-import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
+import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes, Sorts}
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import uk.gov.hmrc.mongo.MongoComponent
@@ -82,6 +82,7 @@ class ServiceProvisionRepository @Inject()(
         , Filters.lte("to"      , to  )
         )
       )
+      .sort(Sorts.ascending("service"))
       .toFuture()
 
 object ServiceProvisionRepository:
