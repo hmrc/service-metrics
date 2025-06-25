@@ -132,6 +132,7 @@ class MetricsController @Inject()(
     environment   : Option[Environment]
   , teamName      : Option[String]
   , digitalService: Option[String]
+  , serviceName   : Option[String]
   , oFrom         : Option[Instant]
   , oTo           : Option[Instant]
   ): Action[AnyContent] =
@@ -143,9 +144,10 @@ class MetricsController @Inject()(
       val to   = oTo  .getOrElse(LocalDate.now().minusMonths(1).`with`(TemporalAdjusters.lastDayOfMonth ).atTime(LocalTime.MAX       ).toInstant(ZoneOffset.UTC))
 
       for
-        oServiceNames <- (teamName, digitalService) match
-                            case (None, None) => Future.successful(None)
-                            case _            => teamsAndRepositoriesConnector.findServices(teamName, digitalService).map(services => Some(services.map(_.name)))
+        oServiceNames <- (teamName, digitalService, serviceName) match
+                            case (None, None, None)    => Future.successful(None)
+                            case (None, None, Some(_)) => Future.successful(Some(serviceName.toList))
+                            case _                     => teamsAndRepositoriesConnector.findServices(teamName, digitalService, serviceName).map(services => Some(services.map(_.name)))
         metrics       <- serviceProvisionRepository.find(oServiceNames, environment, from = from, to = to)
       yield Ok(Json.toJson(metrics))
 
