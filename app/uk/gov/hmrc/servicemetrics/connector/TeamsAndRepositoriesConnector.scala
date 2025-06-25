@@ -51,9 +51,10 @@ class TeamsAndRepositoriesConnector @Inject() (
   def findServices(
     owningTeam    : Option[String]
   , digitalService: Option[String]
+  , name          : Option[String] = None
   )(using hc: HeaderCarrier): Future[Seq[Service]] =
     httpClientV2
-      .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories?organisation=mdtp&repoType=service&owningTeam=$owningTeam&digitalServiceName=$digitalService")
+      .get(url"$teamsAndRepositoriesBaseUrl/api/v2/repositories?organisation=mdtp&repoType=service&owningTeam=$owningTeam&digitalServiceName=$digitalService&name=$name")
       .execute[Seq[Service]]
 
 object TeamsAndRepositoriesConnector:

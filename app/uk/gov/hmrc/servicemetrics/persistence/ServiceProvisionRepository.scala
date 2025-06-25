@@ -78,8 +78,8 @@ class ServiceProvisionRepository @Inject()(
         Filters.and(
           services.fold(Filters.empty)(s => Filters.in("service", s:_*))
         , environment.fold(Filters.empty())(e => Filters.equal("environment", e.asString))
-        , Filters.gte("from"    , from)
-        , Filters.lte("to"      , to  )
+        , Filters.gte("from", from)
+        , Filters.lte("to"  , to  )
         )
       )
       .toFuture()
