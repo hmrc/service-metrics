@@ -17,6 +17,7 @@
 package uk.gov.hmrc.servicemetrics.controllers
 
 import cats.implicits.*
+import play.api.Logging
 import play.api.libs.json.{Json, Writes, __}
 import play.api.mvc.{Action, AnyContent, ControllerComponents, RequestHeader}
 import uk.gov.hmrc.play.bootstrap.backend.controller.BackendController
@@ -41,7 +42,8 @@ class MetricsController @Inject()(
 , teamsAndRepositoriesConnector      : TeamsAndRepositoriesConnector
 )(using
   ExecutionContext
-) extends BackendController(cc):
+) extends BackendController(cc)
+     with Logging:
 
   def getCollections(service: String, environment: Option[Environment]): Action[AnyContent] =
     Action.async:
@@ -113,7 +115,13 @@ class MetricsController @Inject()(
                            .collect:
                              case ((serviceName, logMetricId, environment), logs) if appConfig.logMetrics(logMetricId).showInCatalogue =>
                                val logMetric = appConfig.logMetrics(logMetricId)
-                               val oDatabase = collections.find(mcs => mcs.service == serviceName && mcs.environment == environment).map(_.database)
+                               val oDatabase = collections
+                                                  .find(mcs => mcs.service == serviceName && mcs.environment == environment)
+                                                  .map(_.database)
+                                                  .orElse:
+                                                    logger.warn(s"Missing database for service: $serviceName - assuming database matches service name for $logMetricId link")
+                                                    Some(serviceName)
+
                                MetricsController.ServiceMetric(
                                  service         = serviceName
                                , id              = logMetricId
