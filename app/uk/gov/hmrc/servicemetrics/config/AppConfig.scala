@@ -22,6 +22,7 @@ import uk.gov.hmrc.servicemetrics.model.Environment
 import javax.inject.{Inject, Singleton}
 import scala.collection.immutable.TreeMap
 import scala.concurrent.duration.Duration
+import play.api.Logging
 import play.api.libs.json.JsValue
 import uk.gov.hmrc.servicemetrics.connector.SlackNotificationsConnector
 
@@ -29,7 +30,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 @Singleton
-class AppConfig @Inject()(config: Configuration):
+class AppConfig @Inject()(config: Configuration) extends Logging:
 
   val collectionSizesHistoryFrequency: Duration =
     config.get[Duration]("mongo-collection-size-history.frequency")
@@ -98,15 +99,19 @@ class AppConfig @Inject()(config: Configuration):
   , from       : Instant         = Instant.now().minus(3, ChronoUnit.DAYS) // To match max kibana data storage in staging
   , to         : Option[Instant] = None                                    // Kibana link open ended if not specified
   ): String =
-    (logMetric.logType, oDatabase) match
-      case (_: AppConfig.LogConfigType.AverageMongoDuration, Some(database)) =>
+    logMetric.logType match
+      case _: AppConfig.LogConfigType.AverageMongoDuration =>
+        val database =
+          oDatabase.getOrElse:
+            logger.warn(s"Missing database for service: $serviceName - assuming database matches service name for ${logMetric.displayName} link")
+            serviceName
         logMetric
           .rawKibanaLink
           .replace(s"$${env}"     , URLEncoder.encode(environment.asString      , "UTF-8"))
           .replace(s"$${database}", URLEncoder.encode(database                  , "UTF-8"))
           .replace(s"$${from}"    , URLEncoder.encode(from.toString             , "UTF-8"))
           .replace(s"$${to}"      , URLEncoder.encode(to.fold("now")(_.toString), "UTF-8"))
-      case (_: AppConfig.LogConfigType.GenericSearch, _) =>
+      case _: AppConfig.LogConfigType.GenericSearch =>
         logMetric
           .rawKibanaLink
           .replace(s"$${env}"    , URLEncoder.encode(environment.asString      , "UTF-8"))
