@@ -16,7 +16,6 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
-import org.mongodb.scala.ObservableFuture
 import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
@@ -63,7 +62,7 @@ class ServiceProvisionRepository @Inject()(
                  Filters.eq("environment", environment.asString)
                , Filters.gte("from", from)
                , Filters.lte("to", to)
-               )).toFuture
+               )).toFuture()
           _ <- collection.insertMany(session, metrics).toFuture()
         yield ()
 

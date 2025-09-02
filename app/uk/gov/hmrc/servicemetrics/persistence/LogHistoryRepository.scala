@@ -16,7 +16,6 @@
 
 package uk.gov.hmrc.servicemetrics.persistence
 
-import org.mongodb.scala.ObservableFuture
 import org.mongodb.scala.model.{Filters, IndexModel, IndexOptions, Indexes}
 import play.api.libs.functional.syntax.*
 import play.api.libs.json.*

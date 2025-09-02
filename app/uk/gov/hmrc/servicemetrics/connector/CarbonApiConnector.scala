@@ -54,7 +54,7 @@ class CarbonApiConnector @Inject()(
     )
 
   // To test ssh into service-metrics. To get 1 months data add a target from below replacing $service
-  // curl -G 'http://see-app-config-base/render?&from=1746057600&until=1748735999&format=json' --data-urlencode "target="
+  // curl -G 'http://see-app-config-base/render?from=1746057600&until=1748735999&format=json' --data-urlencode "target="
   def getServiceProvisionMetrics(
     environment: Environment
   , service    : String
@@ -73,7 +73,7 @@ class CarbonApiConnector @Inject()(
                       Nil
     , from          = from
     , to            = to
-    , maxDataPoints = None // Need to set to a high number (like 1000) or not at all otherwise values are "consolidated"  https://graphite.readthedocs.io/en/latest/render_api.html#maxdatapoints
+    , maxDataPoints = Some(10000) // Set to a high number otherwise values are "consolidated"  https://graphite.readthedocs.io/en/latest/render_api.html#maxdatapoints
     ).map:
       case xs if xs.nonEmpty => Map("requests" -> BigDecimal(0)) ++ xs.map(x => x.label -> x.value).toMap.updatedWith("memory")(_.map(byteToMebibyte))
       case _                 => Map.empty
