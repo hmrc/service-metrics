@@ -73,7 +73,7 @@ class CarbonApiConnector @Inject()(
                       Nil
     , from          = from
     , to            = to
-    , maxDataPoints = Some(10000) // Set to a high number otherwise values are "consolidated"  https://graphite.readthedocs.io/en/latest/render_api.html#maxdatapoints
+    , maxDataPoints = Some(8000) // Set to a high number otherwise values are "consolidated"  https://graphite.readthedocs.io/en/latest/render_api.html#maxdatapoints
     ).map:
       case xs if xs.nonEmpty => Map("requests" -> BigDecimal(0)) ++ xs.map(x => x.label -> x.value).toMap.updatedWith("memory")(_.map(byteToMebibyte))
       case _                 => Map.empty
