@@ -18,7 +18,6 @@ package uk.gov.hmrc.servicemetrics.persistence
 
 import org.mongodb.scala.bson.BsonDocument
 import org.mongodb.scala.model.ReplaceOptions
-import org.mongodb.scala.SingleObservableFuture
 import uk.gov.hmrc.mongo.MongoComponent
 import uk.gov.hmrc.mongo.play.json.PlayMongoRepository
 import uk.gov.hmrc.mongo.play.json.formats.MongoJavatimeFormats

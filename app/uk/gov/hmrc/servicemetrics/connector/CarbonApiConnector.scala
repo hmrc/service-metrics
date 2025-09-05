@@ -54,7 +54,7 @@ class CarbonApiConnector @Inject()(
     )
 
   // To test ssh into service-metrics. To get 1 months data add a target from below replacing $service
-  // curl -G 'http://see-app-config-base/render?&from=1746057600&until=1748735999&format=json' --data-urlencode "target="
+  // curl -G 'http://see-app-config-base/render?from=1746057600&until=1748735999&format=json' --data-urlencode "target="
   def getServiceProvisionMetrics(
     environment: Environment
   , service    : String
@@ -65,15 +65,15 @@ class CarbonApiConnector @Inject()(
 
     getMetric(
       env           = environment
-    , targets       = s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_[2-5][0-9][0-9].sum, 'sum'), '1year', 'sum', false), 'requests')"                               :: // 1month returns multiple buckets so using 1year
-                      s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_time.mean.avg, 'average'), '1year', 'average', false), 'time')"                                 ::
-                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved, 'count'), '1year', 'average', false), 'instances')"    :: // counts per instance of metric
-                      s"alias(summarize(scale(sumSeries(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved), 7.450581e-9), '1year', 'avg', false), 'slots')" :: // (128 * 1024 * 1024)
-                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-utilized, 'max'), '1year', 'max', false) , 'memory')"            :: // max memory in byte for instance
+    , targets       = s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_[2-5][0-9][0-9].sum, 'sum'), '3months', 'sum', false), 'requests')"                               :: // 1month returns multiple buckets so using 3months
+                      s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_time.mean.avg, 'average'), '3months', 'average', false), 'time')"                                 ::
+                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved, 'count'), '3months', 'average', false), 'instances')"    :: // counts per instance of metric
+                      s"alias(summarize(scale(sumSeries(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved), 7.450581e-9), '3months', 'avg', false), 'slots')" :: // (128 * 1024 * 1024)
+                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-utilized, 'max'), '3months', 'max', false) , 'memory')"            :: // max memory in byte for instance
                       Nil
     , from          = from
     , to            = to
-    , maxDataPoints = None // Need to set to a high number (like 1000) or not at all otherwise values are "consolidated"  https://graphite.readthedocs.io/en/latest/render_api.html#maxdatapoints
+    , maxDataPoints = Some(6000) // Set to a high number otherwise values are "consolidated"  https://graphite.readthedocs.io/en/latest/render_api.html#maxdatapoints
     ).map:
       case xs if xs.nonEmpty => Map("requests" -> BigDecimal(0)) ++ xs.map(x => x.label -> x.value).toMap.updatedWith("memory")(_.map(byteToMebibyte))
       case _                 => Map.empty
