@@ -65,6 +65,12 @@ class AppConfig @Inject()(config: Configuration) extends Logging:
                                       , keyword       = "service.keyword"
                                       , onlyNotifyIn  = Nil // Teams are already sent a Pager Duty
                                       )
+    , LogMetricId.BackendSession   -> LogMetric(
+                                        displayName     = "Session Data Sent to Backend"
+                                      , logType         = LogConfigType.GenericSearch("level.raw: \\\"WARN\\\" AND \\\"Session data detected in incoming request\\\"")
+                                      , rawKibanaLink   = config.get[String]("alerts.slack.kibana.links.backend-session")
+                                      , showInCatalogue = false // PlatOps Slack notification is all that's required
+                                      )
     )
 
   import uk.gov.hmrc.servicemetrics.persistence.LogHistoryRepository
@@ -138,6 +144,7 @@ object AppConfig:
     case NonIndexedQuery  extends LogMetricId("non-indexed-query" )
     case OrphanToken      extends LogMetricId("orphan-token"      )
     case ContainerKills   extends LogMetricId("container-kills"   )
+    case BackendSession   extends LogMetricId("backend-session"   )
 
   case class LogMetric(
     displayName    : String
