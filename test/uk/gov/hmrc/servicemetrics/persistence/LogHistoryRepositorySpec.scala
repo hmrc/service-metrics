@@ -65,8 +65,6 @@ class LogHistoryRepositorySpec
         , to   = now
         ).futureValue should be (Seq(item))
 
-  "find" should:
-    "return results" when:
       "there are container-kills logs for a service" in:
         val item =
           LogHistoryRepository.LogHistory(
@@ -88,3 +86,25 @@ class LogHistoryRepositorySpec
         , from     = now.minusSeconds(10)
         , to       = now
         ).futureValue should be (Seq(item))
+
+      "there are backend-session logs for a service" in :
+        val item =
+          LogHistoryRepository.LogHistory(
+            timestamp = now
+            , since = now.minusSeconds(20)
+            , service = "service"
+            , logType = LogHistoryRepository.LogType.GenericSearch(
+              AppConfig.LogMetricId.BackendSession
+              , details = 5
+            )
+            , environment = Environment.QA
+            , teams = Seq("team")
+          )
+
+        repository.insertMany(Seq(item)).futureValue
+
+        repository.find(
+          services = Some(Seq("service"))
+          , from = now.minusSeconds(10)
+          , to = now
+        ).futureValue should be(Seq(item))
