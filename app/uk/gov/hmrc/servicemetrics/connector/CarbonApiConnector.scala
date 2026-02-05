@@ -65,11 +65,11 @@ class CarbonApiConnector @Inject()(
 
     getMetric(
       env           = environment
-    , targets       = s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_[2-5][0-9][0-9].sum, 'sum'), '3months', 'sum', false), 'requests')"                               :: // 1month returns multiple buckets so using 3months
-                      s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_time.mean.avg, 'average'), '3months', 'average', false), 'time')"                                 ::
-                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved, 'count'), '3months', 'average', false), 'instances')"    :: // counts per instance of metric
-                      s"alias(summarize(scale(sumSeries(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved), 7.450581e-9), '3months', 'avg', false), 'slots')" :: // (128 * 1024 * 1024)
-                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-utilized, 'max'), '3months', 'max', false) , 'memory')"            :: // max memory in byte for instance
+    , targets       = s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_[2-5][0-9][0-9].sum,'sum'),'3months','sum',false),'requests')"                               :: // 1month returns multiple buckets so using 3months
+                      s"alias(summarize(aggregate(aggregates.$service.*.upstream_rq_time.mean.avg,'average'),'3months','average',false),'time')"                                 ::
+                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved,'count'),'3months','average',false),'instances')"    :: // counts per instance of metric
+                      s"alias(summarize(scale(sumSeries(container-insights.*-mdtp.*$service*.Container.$service.*.memory-reserved),7.450581e-9),'3months','avg',false),'slots')" :: // (128 * 1024 * 1024)
+                      s"alias(summarize(aggregate(container-insights.*-mdtp.*$service*.Container.$service.*.memory-utilized,'max'),'3months','max',false),'memory')"            :: // max memory in byte for instance
                       Nil
     , from          = from
     , to            = to
