@@ -27,6 +27,9 @@ import uk.gov.hmrc.servicemetrics.model.Environment
 import java.time.Instant
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
+import play.api.libs.json.JsValue
+import play.api.Logging
+import play.api.libs.json.{JsError, JsString, JsSuccess, Reads, Writes}
 
 @Singleton
 class CarbonApiConnector @Inject()(
@@ -34,7 +37,7 @@ class CarbonApiConnector @Inject()(
 , servicesConfig: ServicesConfig
 )(using
   ExecutionContext
-):
+) extends Logging :
   import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.Metric
 
   private val carbonApiBaseUrl: String = servicesConfig.baseUrl("carbon-api")
@@ -88,7 +91,15 @@ class CarbonApiConnector @Inject()(
     given Reads[Metric] = Metric.reads
     httpClientV2
       .get(url"${carbonApiBaseUrl.replace("$env", env.asString)}/render?target=$targets&from=${from.getEpochSecond}&until=${to.getEpochSecond}&format=json&maxDataPoints=$maxDataPoints")
-      .execute[Seq[Metric]]
+      .execute[JsValue]
+      .map { json =>
+        logger.info(s"Response: $json")
+        json.validate[Seq[Metric]] match
+          case JsSuccess(metrics, _) => metrics
+          case JsError(errors) =>
+            logger.error(s"Failed to parse metrics JSON: $errors")
+            throw new RuntimeException("Invalid metrics JSON")
+    }
 
 object CarbonApiConnector:
 
