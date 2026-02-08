@@ -34,7 +34,7 @@ class CarbonApiConnector @Inject()(
 , servicesConfig: ServicesConfig
 )(using
   ExecutionContext
-) :
+):
   import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.Metric
 
   private val carbonApiBaseUrl: String = servicesConfig.baseUrl("carbon-api")
