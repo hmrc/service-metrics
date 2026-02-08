@@ -27,7 +27,6 @@ import uk.gov.hmrc.servicemetrics.model.Environment
 import java.time.Instant
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
-import play.api.Logging
 
 @Singleton
 class CarbonApiConnector @Inject()(
@@ -35,7 +34,7 @@ class CarbonApiConnector @Inject()(
 , servicesConfig: ServicesConfig
 )(using
   ExecutionContext
-) extends Logging :
+) :
   import uk.gov.hmrc.servicemetrics.connector.CarbonApiConnector.Metric
 
   private val carbonApiBaseUrl: String = servicesConfig.baseUrl("carbon-api")
