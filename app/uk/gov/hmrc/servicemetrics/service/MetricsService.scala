@@ -173,6 +173,10 @@ class MetricsService @Inject()(
                        , environment = environment
                        , metrics     = metrics
                        )
+                     .recover { _ =>
+                      logger.warn(s"Failed to fetch metrics for $service in ${environment.asString}")
+                      acc
+                    }
       _       <- serviceProvisionRepository.insertMany(environment, from = from, to = to, metrics)
     yield logger.info(s"Successfully inserted service provision metrics for ${environment.asString}")
 

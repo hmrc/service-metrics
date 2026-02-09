@@ -17,7 +17,7 @@
 package uk.gov.hmrc.servicemetrics.connector
 
 import play.api.libs.functional.syntax.toFunctionalBuilderOps
-import play.api.libs.json.{Reads, __}
+import play.api.libs.json._
 import uk.gov.hmrc.http.HttpReads.Implicits._
 import uk.gov.hmrc.http.client.HttpClientV2
 import uk.gov.hmrc.http.{HeaderCarrier, StringContextOps}
@@ -101,6 +101,12 @@ object CarbonApiConnector:
   object Metric:
     val reads: Reads[Metric] =
       ( (__ \ "target"            ).read[String]
-      ~ (__ \ "datapoints" \ 0 \ 0).read[BigDecimal]
+      ~ (__ \ "datapoints" \ 0 \ 0).read[BigDecimal](
+        Reads[BigDecimal] {
+          case JsNull      => JsSuccess(BigDecimal(0))
+          case n: JsNumber => JsSuccess(n.value)
+          case n           => JsError(s"expected number or null but found $n")
+        }
+      )
       ~ (__ \ "datapoints" \ 0 \ 1).read[Long].map(Instant.ofEpochSecond)
       )(apply)
