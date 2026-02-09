@@ -28,6 +28,7 @@ import java.time.{Instant, LocalDate, ZoneOffset}
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 import uk.gov.hmrc.servicemetrics.connector.TeamsAndRepositoriesConnector.Service
+import uk.gov.hmrc.servicemetrics.persistence.ServiceProvisionRepository.ServiceProvision
 
 @Singleton
 class MetricsService @Inject()(
@@ -162,10 +163,10 @@ class MetricsService @Inject()(
 
   def insertServiceProvisionMetrics(environment: Environment, from: Instant, to: Instant, services: Seq[String])(using HeaderCarrier): Future[Unit] =
     for
-      metrics <- services.foldLeftM[Future, Seq[ServiceProvisionRepository.ServiceProvision]](Seq.empty): (acc, service) =>
+      metrics <- services.foldLeftM[Future, Seq[ServiceProvision]](Seq.empty): (acc, service) =>
                    carbonApiConnector
                      .getServiceProvisionMetrics(environment, service, from = from, to = to)
-                     .map: metrics =>
+                     .map { metrics =>
                        acc :+ ServiceProvisionRepository.ServiceProvision(
                          from        = from
                        , to          = to
@@ -173,6 +174,10 @@ class MetricsService @Inject()(
                        , environment = environment
                        , metrics     = metrics
                        )
+                       }.recover { case e =>
+                        logger.warn(s"Failed to fetch metrics for $service in ${environment.asString}", e)
+                        acc
+                      }
       _       <- serviceProvisionRepository.insertMany(environment, from = from, to = to, metrics)
     yield logger.info(s"Successfully inserted service provision metrics for ${environment.asString}")
 
