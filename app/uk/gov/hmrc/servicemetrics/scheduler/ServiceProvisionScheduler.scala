@@ -75,7 +75,7 @@ class ServiceProvisionScheduler @Inject()(
       _       <- if   lastRun.fold(-1)(month) == month(now)
                  then Future.successful(logger.info("Not updating service provision metrics - last month has already been stored"))
                  else
-                   val t1   = LocalDate.now().minusMonths(1)
+                   val t1   = LocalDate.now().minusMonths(2)
                    val from = t1.`with`(TemporalAdjusters.firstDayOfMonth).atStartOfDay(ZoneOffset.UTC).toInstant
                    val to   = t1.`with`(TemporalAdjusters.lastDayOfMonth).atTime(LocalTime.MAX).toInstant(ZoneOffset.UTC)
                    envs
@@ -83,5 +83,5 @@ class ServiceProvisionScheduler @Inject()(
                        (env -> wrw.collect { case x if x.deployments.exists(_.environment == env) => x.serviceName })
                      .foldLeftM(()):
                        case (_, (env, services)) => metricsService.insertServiceProvisionMetrics(env, from = from, to = to, services)
-      _       <- lastRunRepository.setLastRun(now)
+    // _       <- lastRunRepository.setLastRun(now)
     yield logger.info(s"Finished updating service provision metrics for ${envs.mkString(", ")}")
