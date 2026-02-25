@@ -75,7 +75,7 @@ class ServiceProvisionScheduler @Inject()(
       _       <- if   lastRun.fold(-1)(month) == month(now)
                  then Future.successful(logger.info("Not updating service provision metrics - last month has already been stored"))
                  else
-                   val t1   = LocalDate.now().minusMonths(4)
+                   val t1   = LocalDate.now().minusMonths(5)
                    val from = t1.`with`(TemporalAdjusters.firstDayOfMonth).atStartOfDay(ZoneOffset.UTC).toInstant
                    val to   = t1.`with`(TemporalAdjusters.lastDayOfMonth).atTime(LocalTime.MAX).toInstant(ZoneOffset.UTC)
                    envs
