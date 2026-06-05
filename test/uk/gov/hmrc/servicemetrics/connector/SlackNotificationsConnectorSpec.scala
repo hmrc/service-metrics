@@ -53,7 +53,7 @@ class SlackNotificationsConnectorSpec
   "allServices" should:
     "return list of service names" in:
       stubFor:
-        post(urlEqualTo("/slack-notifications/v2/notification"))
+        post(urlEqualTo("/api/v2/notification"))
           .willReturn:
             aResponse()
               .withStatus(200)
@@ -81,7 +81,7 @@ class SlackNotificationsConnectorSpec
       response shouldBe ()
 
       verify(
-        postRequestedFor(urlEqualTo("/slack-notifications/v2/notification"))
+        postRequestedFor(urlEqualTo("/api/v2/notification"))
            .withRequestBody(equalToJson("""{
              "channelLookup": {
                "by"      : "github-team",
