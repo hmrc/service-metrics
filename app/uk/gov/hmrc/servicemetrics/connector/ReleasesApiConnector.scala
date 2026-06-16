@@ -42,7 +42,7 @@ class ReleasesApiConnector @Inject()(
   def whatsRunningWhere()(using hc: HeaderCarrier): Future[Seq[WhatsRunningWhere]] =
     given Reads[WhatsRunningWhere] = WhatsRunningWhere.reads
     httpClientV2
-      .get(url"$baseUrl/api/whats-running-where")
+      .get(url"$baseUrl/releases-api/whats-running-where")
       .execute[Seq[WhatsRunningWhere]]
 
 object ReleasesApiConnector extends Logging:
