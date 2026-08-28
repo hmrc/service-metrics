@@ -24,6 +24,7 @@ import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatestplus.mockito.MockitoSugar
+import play.api.libs.json.JsValue
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import play.api.inject.ApplicationLifecycle
 import uk.gov.hmrc.http.HeaderCarrier
@@ -36,6 +37,7 @@ import uk.gov.hmrc.servicemetrics.persistence.{LogHistoryRepository, Notificatio
 import uk.gov.hmrc.servicemetrics.service.MetricsService
 
 import java.time._
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -59,6 +61,44 @@ class NotificationsSchedulerSpec
           .sendMessage(any[SlackNotificationsConnector.Request])(using any[HeaderCarrier])
         verify(mockNotificationRepository, times(1))
           .flagAsNotified(any[Seq[NotificationRepository.Notification]])
+
+      "there is a non-indexed query to notify a GitHub team about" in new MongoNotificationsSchedulerFixture(
+        notifyTeams          = true,
+        notificationChannels = Seq.empty,
+        nonIndexedQueryLink  = "http://kibana/non-indexed-query"
+      ):
+        val before: Instant = Instant.now()
+
+        scheduler.notifyAndRecord("some-team", AppConfig.LogMetricId.NonIndexedQuery, nonIndexedQueryLogs).futureValue
+
+        val after: Instant = Instant.now()
+
+        verify(mockNotificationRepository, times(1))
+          .hasBeenNotified(same("some-team"), same(AppConfig.LogMetricId.NonIndexedQuery))
+        sentRequests should have size 1
+        flaggedNotificationBatches should have size 1
+
+        val request: SlackNotificationsConnector.Request = sentRequests.head
+        request.channelLookup  shouldBe SlackNotificationsConnector.ChannelLookup.GithubTeam("some-team")
+        request.text           shouldBe "PlatOps notification of Kibana logs"
+        request.displayName    shouldBe "MDTP Catalogue"
+        request.emoji          shouldBe ":tudor-crown:"
+        request.callbackChannel shouldBe Some("team-platops-alerts")
+
+        val slackTextBlock: Seq[String] = request.blocks.flatMap(blockText)
+        slackTextBlock should have size 2
+        slackTextBlock should contain("Hi *some-team*, you have the following *Non-indexed Query* Kibana logs:")
+        slackTextBlock should contain("• service *naughty-service* in *QA* for collection *collection* - <http://kibana/non-indexed-query|see kibana>")
+
+        val storedNotifications: Seq[NotificationRepository.Notification] = flaggedNotificationBatches.head
+        storedNotifications should have size 1
+        val storedNotification: NotificationRepository.Notification = storedNotifications.head
+        storedNotification.service     shouldBe "naughty-service"
+        storedNotification.environment shouldBe Environment.QA
+        storedNotification.team        shouldBe "some-team"
+        storedNotification.logType     shouldBe nonIndexedQueryLogs.head.logType
+        storedNotification.timestamp.toEpochMilli should be >= before.toEpochMilli
+        storedNotification.timestamp.toEpochMilli should be <= after.toEpochMilli
 
     "do not notify teams logs queries" when:
       "notification has been already triggered for this team" in new MongoNotificationsSchedulerFixture(
@@ -127,7 +167,8 @@ class NotificationsSchedulerSpec
   abstract class MongoNotificationsSchedulerFixture(
     hasBeenNotified     : Boolean     = false,
     notifyTeams         : Boolean     = true,
-    notificationChannels: Seq[String] = Seq("channel")
+    notificationChannels: Seq[String] = Seq("channel"),
+    nonIndexedQueryLink : String      = "http://logs.${env}.local/non-indexed-query/${database}?from=${from}&to=${to}"
   ):
 
     val app = new play.api.inject.guice.GuiceApplicationBuilder()
@@ -135,6 +176,7 @@ class NotificationsSchedulerSpec
         Map(
           "alerts.slack.notify-teams"          -> notifyTeams
         , "alerts.slack.notification-channels" -> notificationChannels
+        , "alerts.slack.kibana.links.non-indexed-query" -> nonIndexedQueryLink
         )
       ).build()
 
@@ -144,6 +186,8 @@ class NotificationsSchedulerSpec
     val mockMetricsService               = mock[MetricsService]
     val mockSlackNotificationsConnector  = mock[SlackNotificationsConnector]
     val mockNotificationRepository       = mock[NotificationRepository]
+    val sentRequests                     = ListBuffer.empty[SlackNotificationsConnector.Request]
+    val flaggedNotificationBatches       = ListBuffer.empty[Seq[NotificationRepository.Notification]]
 
     val scheduler = NotificationsScheduler(
       config                      = app.configuration
@@ -175,11 +219,38 @@ class NotificationsSchedulerSpec
         , teams       = Seq("some-team")
         ) :: Nil
 
+    val nonIndexedQueryLogs: Seq[LogHistoryRepository.LogHistory] =
+      LogHistoryRepository.LogHistory(
+          timestamp   = Instant.now()
+        , since       = Instant.now().minusSeconds(20)
+        , service     = "naughty-service"
+        , logType     = LogHistoryRepository.LogType.AverageMongoDuration(
+                          AppConfig.LogMetricId.NonIndexedQuery
+                        , Seq(
+                            LogHistoryRepository.LogType.AverageMongoDuration.MongoDetails(
+                              database    = "database"
+                            , collection  = "collection"
+                            , duration    = 42
+                            , occurrences = 3
+                            )
+                          )
+                        )
+        , environment = Environment.QA
+        , teams       = Seq("some-team")
+        ) :: Nil
+
     when(mockNotificationRepository.hasBeenNotified(any[String], any[AppConfig.LogMetricId]))
       .thenReturn(Future.successful(hasBeenNotified))
 
     when(mockNotificationRepository.flagAsNotified(any[Seq[NotificationRepository.Notification]]))
-      .thenReturn(Future.unit)
+      .thenAnswer: invocation =>
+        flaggedNotificationBatches += invocation.getArgument[Seq[NotificationRepository.Notification]](0)
+        Future.unit
 
     when(mockSlackNotificationsConnector.sendMessage(any[SlackNotificationsConnector.Request])(using any[HeaderCarrier]))
-      .thenReturn(Future.unit)
+      .thenAnswer: invocation =>
+        sentRequests += invocation.getArgument[SlackNotificationsConnector.Request](0)
+        Future.unit
+
+    protected def blockText(block: JsValue): Option[String] =
+      (block \ "text").asOpt[JsValue].flatMap(x => (x \ "text").asOpt[String])
