@@ -16,12 +16,14 @@
 
 package uk.gov.hmrc.servicemetrics.connector
 
-import com.github.tomakehurst.wiremock.client.WireMock._
+import com.github.tomakehurst.wiremock.client.WireMock
+import com.github.tomakehurst.wiremock.client.WireMock.{exactly, *}
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatestplus.mockito.MockitoSugar
 import play.api.Configuration
+import play.api.libs.json.Json
 import uk.gov.hmrc.http.HeaderCarrier
 import uk.gov.hmrc.http.test.{HttpClientV2Support, WireMockSupport}
 import uk.gov.hmrc.play.bootstrap.config.ServicesConfig
@@ -181,7 +183,7 @@ class ElasticsearchConnectorSpec
                       }
                     }
                   }"""
-                )
+                 )
 
         connector
           .averageMongoDuration(Environment.QA, dataView = "logstash-*", query = "some.raw:'Foo'", now.minusSeconds(1000), now)
@@ -190,5 +192,163 @@ class ElasticsearchConnectorSpec
                                     AverageMongoDuration(collection = "some-collection-1", occurrences = 2, avgDuration = 6145)
                                   , AverageMongoDuration(collection = "some-collection-2", occurrences = 3, avgDuration = 3818)
                                   )
-          , "some-database-2" -> Seq(AverageMongoDuration(collection = "some-collection-3", occurrences = 9, avgDuration = 16800))
+            , "some-database-2" -> Seq(AverageMongoDuration(collection = "some-collection-3", occurrences = 9, avgDuration = 16800))
+            )
+
+    "Construct NonIndexedQuery with embedded filter for sending to Elasticsearch" in:
+        val nonIndexedQuery = "scan:COLLSCAN AND NOT operation: \\\"no-index-required\\\" AND operation: \\\"lsid\\\""
+        val from = now.minusSeconds(1000)
+        val to = now
+
+        nonIndexedQuery should include ("scan:COLLSCAN")
+
+
+        val expectedRequestBody = Json.parse(s"""
+          |{
+          |  "size": 0,
+          |  "query": {
+          |    "bool": {
+          |      "must": [
+          |        {
+          |          "query_string": {
+          |            "query": "type:mongodb AND NOT mongo_db:(\\\"backup_mongo\\\"|\\\"backup_protected-mongo\\\"|\\\"backup_protected-auth-mongo\\\"|\\\"backup_protected-centralised-auth-mongo\\\"|\\\"backup_protected-rate-mongo\\\"|\\\"backup_public-mongo\\\") AND $nonIndexedQuery"
+          |          }
+          |        }
+          |      ],
+          |      "filter": [
+          |        {
+          |          "range": {
+          |            "@timestamp": {
+          |              "format": "strict_date_optional_time",
+          |              "gte": "$from",
+          |              "lte": "$to"
+          |            }
+          |          }
+          |        }
+          |      ]
+          |    }
+          |  },
+          |  "aggs": {
+          |    "database": {
+          |      "terms": {
+          |        "field": "database.raw"
+          |      },
+          |      "aggs": {
+          |        "collection": {
+          |          "terms": {
+          |            "field": "collection.raw"
+          |          },
+          |          "aggs": {
+          |            "avg_duration": {
+          |              "avg": {
+          |                "field": "duration"
+          |              }
+          |            }
+          |          }
+          |        }
+          |      }
+          |    }
+          |  },
+          |  "sort": [
+          |    {
+          |      "@timestamp": {
+          |        "order": "desc"
+          |      }
+          |    }
+          |  ]
+          |}
+          |""".stripMargin)
+
+        stubFor:
+          post(urlPathEqualTo(s"/logstash-*/_search/"))
+            .willReturn:
+              aResponse()
+                .withStatus(200)
+                .withBody("""
+                  {
+                    "took": 493,
+                    "timed_out": false,
+                    "_shards": {
+                      "total": 737,
+                      "successful": 737,
+                      "skipped": 613,
+                      "failed": 0
+                    },
+                    "hits": {
+                      "total": {
+                        "value": 10000,
+                        "relation": "gte"
+                      },
+                      "max_score": null,
+                      "hits": []
+                    },
+                    "aggregations": {
+                      "database": {
+                        "doc_count_error_upper_bound": 0,
+                        "sum_other_doc_count": 314,
+                        "buckets": [
+                          {
+                            "key": "some-database-1",
+                            "doc_count": 5,
+                            "collection": {
+                              "doc_count_error_upper_bound": 0,
+                              "sum_other_doc_count": 0,
+                              "buckets": [
+                                {
+                                  "key": "some-collection-1",
+                                  "doc_count": 2,
+                                  "avg_duration": {
+                                    "value": 6145.902085472786
+                                  }
+                                },
+                                {
+                                  "key": "some-collection-2",
+                                  "doc_count": 3,
+                                  "avg_duration": {
+                                    "value": 3818.171965317919
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": "some-database-2",
+                            "doc_count": 9,
+                            "collection": {
+                              "doc_count_error_upper_bound": 0,
+                              "sum_other_doc_count": 0,
+                              "buckets": [
+                                {
+                                  "key": "some-collection-3",
+                                  "doc_count": 9,
+                                  "avg_duration": {
+                                    "value": 16800.564043209877
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }"""
+                )
+
+        val result = connector
+          .averageMongoDuration(Environment.QA, dataView = "logstash-*", query = nonIndexedQuery, now.minusSeconds(1000), now)
+          .futureValue
+
+        result shouldBe Map(
+          "some-database-1" -> Seq(
+                                  AverageMongoDuration(collection = "some-collection-1", occurrences = 2, avgDuration = 6145)
+                                , AverageMongoDuration(collection = "some-collection-2", occurrences = 3, avgDuration = 3818)
+                                )
+        , "some-database-2" -> Seq(AverageMongoDuration(collection = "some-collection-3", occurrences = 9, avgDuration = 16800))
+        )
+
+        // Verify exactly one Elasticsearch request with tolerant JSON matching.
+        verify(
+          WireMock.exactly(1),
+          postRequestedFor(urlPathEqualTo("/logstash-*/_search/"))
+            .withRequestBody(equalToJson(expectedRequestBody.toString(), true, false))
           )
